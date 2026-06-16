@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PrivateAI — On-Premise Intelligence</title>
+<style>
+  :root {
+    --bg:#0a0d12;--surface:#111520;--surface-2:#161c28;--surface-3:#1d2435;
+    --border:rgba(255,255,255,0.07);--border-glow:rgba(56,189,248,0.25);
+    --accent:#38bdf8;--accent-dim:rgba(56,189,248,0.12);--accent-2:#818cf8;
+    --green:#34d399;--red:#f87171;--amber:#fbbf24;
+    --text:#e2e8f0;--text-muted:#64748b;--text-dim:#94a3b8;
+    --radius:10px;--radius-lg:16px;--shadow:0 4px 24px rgba(0,0,0,0.4);
+    --font-mono:"JetBrains Mono","Fira Code",monospace;
+    --font:"Inter",system-ui,sans-serif;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);background:var(--bg);color:var(--text);height:100vh;display:flex;overflow:hidden;font-size:14px}
+  ::-webkit-scrollbar{width:5px;height:5px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:99px}
+  #sidebar{width:240px;min-width:240px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+  .sidebar-logo{padding:20px 18px 16px;border-bottom:1px solid var(--border)}
+  .logo-mark{display:flex;align-items:center;gap:10px}
+  .logo-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--accent-2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
+  .logo-text{font-size:15px;font-weight:700;letter-spacing:-0.3px}
+  .logo-sub{font-size:10px;color:var(--text-muted);letter-spacing:0.5px;text-transform:uppercase;margin-top:1px}
+  .sidebar-nav{padding:12px 10px;display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:auto}
+  .nav-label{font-size:10px;font-weight:600;color:var(--text-muted);letter-spacing:0.8px;text-transform:uppercase;padding:8px 8px 4px}
+  .nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius);cursor:pointer;color:var(--text-dim);transition:all .15s;font-size:13.5px;font-weight:500;border:1px solid transparent;user-select:none}
+  .nav-item:hover{background:var(--surface-2);color:var(--text)}
+  .nav-item.active{background:var(--accent-dim);color:var(--accent);border-color:var(--border-glow)}
+  .nav-icon{font-size:15px;width:18px;text-align:center}
+  .nav-badge{margin-left:auto;background:var(--surface-3);color:var(--text-muted);font-size:10px;padding:1px 6px;border-radius:99px;font-family:var(--font-mono)}
+  .sidebar-status{padding:12px 14px;border-top:1px solid var(--border)}
+  .status-row{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-muted);margin-bottom:5px}
+  .status-dot{width:7px;height:7px;border-radius:50%;background:var(--text-muted);flex-shrink:0}
+  .status-dot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+  .status-dot.error{background:var(--red)}
+  .status-dot.pinging{animation:pulse-dot 1s ease-in-out infinite}
+  @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:0.3}}
+  #main{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+  #topbar{display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
+  .page-title{font-size:15px;font-weight:600;flex:1}
+  .page-sub{font-size:12px;color:var(--text-muted)}
+  .model-selector{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:6px 10px;font-size:12.5px;font-family:var(--font-mono);cursor:pointer;outline:none;transition:border-color .15s;max-width:180px}
+  .model-selector:focus{border-color:var(--accent)}
+  .toggle-rag{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim);cursor:pointer;user-select:none}
+  .toggle-switch{width:32px;height:18px;background:var(--surface-3);border-radius:99px;position:relative;transition:background .2s;flex-shrink:0}
+  .toggle-switch.on{background:var(--accent)}
+  .toggle-switch::after{content:"";position:absolute;width:12px;height:12px;background:#fff;border-radius:50%;top:3px;left:3px;transition:left .2s}
+  .toggle-switch.on::after{left:17px}
+  .view{display:none;flex:1;overflow:hidden;flex-direction:column}
+  .view.active{display:flex}
+  #chat-messages{flex:1;overflow-y:auto;padding:24px 20px;display:flex;flex-direction:column;gap:16px}
+  .msg{display:flex;gap:12px;max-width:760px;animation:msg-in .2s ease}
+  @keyframes msg-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+  .msg.user{align-self:flex-end;flex-direction:row-reverse}
+  .msg-avatar{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+  .msg.assistant .msg-avatar{background:linear-gradient(135deg,var(--accent),var(--accent-2))}
+  .msg.user .msg-avatar{background:var(--surface-3)}
+  .msg-bubble{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 16px;line-height:1.65;font-size:13.5px;max-width:100%;word-break:break-word}
+  .msg.user .msg-bubble{background:var(--accent-dim);border-color:var(--border-glow);border-bottom-right-radius:4px}
+  .msg.assistant .msg-bubble{border-bottom-left-radius:4px}
+  .msg-bubble code{font-family:var(--font-mono);background:var(--surface-3);padding:1px 5px;border-radius:4px;font-size:12.5px}
+  .msg-bubble pre{background:var(--surface-3);border-radius:8px;padding:12px;overflow-x:auto;margin:8px 0;font-family:var(--font-mono);font-size:12px}
+  .typing-indicator{display:flex;align-items:center;gap:4px;padding:4px 0}
+  .typing-dot{width:6px;height:6px;border-radius:50%;background:var(--text-muted);animation:blink 1.2s ease-in-out infinite}
+  .typing-dot:nth-child(2){animation-delay:.2s}
+  .typing-dot:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,80%,100%{opacity:0.3}40%{opacity:1}}
+  .empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--text-muted);text-align:center;padding:40px}
+  .empty-state .big-icon{font-size:48px;margin-bottom:8px}
+  .empty-state h2{font-size:18px;color:var(--text-dim);font-weight:600}
+  .empty-state p{font-size:13px;max-width:380px;line-height:1.6}
+  .suggestion-chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px}
+  .chip{padding:7px 14px;border-radius:99px;background:var(--surface);border:1px solid var(--border);color:var(--text-dim);font-size:12.5px;cursor:pointer;transition:all .15s}
+  .chip:hover{border-color:var(--accent);color:var(--accent)}
+  #chat-input-area{padding:16px 20px;border-top:1px solid var(--border);background:var(--surface);flex-shrink:0}
+  .input-row{display:flex;gap:10px;align-items:flex-end;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:8px 12px;transition:border-color .15s}
+  .input-row:focus-within{border-color:var(--accent)}
+  #chat-input{flex:1;background:none;border:none;outline:none;color:var(--text);font-size:14px;font-family:var(--font);resize:none;max-height:140px;min-height:22px;line-height:1.5}
+  #chat-input::placeholder{color:var(--text-muted)}
+  .send-btn{width:34px;height:34px;border-radius:8px;background:var(--accent);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;flex-shrink:0;transition:all .15s}
+  .send-btn:hover{background:#7dd3fc}
+  .send-btn:disabled{background:var(--surface-3);cursor:not-allowed}
+  .input-meta{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:8px;padding:0 4px}
+  .rag-indicator{display:flex;align-items:center;gap:5px;padding:2px 8px;border-radius:99px;font-size:11px;transition:all .15s}
+  .rag-indicator.on{background:rgba(52,211,153,0.12);color:var(--green)}
+  .rag-indicator.off{color:var(--text-muted)}
+  .view-content{flex:1;overflow-y:auto;padding:24px}
+  .view-header{display:flex;align-items:center;gap:12px;margin-bottom:24px}
+  .view-header h2{font-size:18px;font-weight:700;flex:1}
+  .btn{padding:8px 16px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:13px;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px;font-family:var(--font);font-weight:500}
+  .btn:hover{border-color:var(--accent);color:var(--accent)}
+  .btn.primary{background:var(--accent);color:#000;border-color:var(--accent)}
+  .btn.primary:hover{background:#7dd3fc}
+  .btn.danger{border-color:var(--red);color:var(--red)}
+  .btn.danger:hover{background:rgba(248,113,113,0.1)}
+  .upload-zone{border:2px dashed var(--border);border-radius:var(--radius-lg);padding:40px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:24px}
+  .upload-zone:hover,.upload-zone.drag-over{border-color:var(--accent);background:var(--accent-dim)}
+  .upload-zone .icon{font-size:36px;margin-bottom:10px}
+  .upload-zone h3{font-size:15px;font-weight:600;margin-bottom:6px}
+  .upload-zone p{font-size:12.5px;color:var(--text-muted)}
+  .doc-list{display:flex;flex-direction:column;gap:8px}
+  .doc-card{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);transition:border-color .15s}
+  .doc-card:hover{border-color:var(--border-glow)}
+  .doc-icon{font-size:22px;flex-shrink:0}
+  .doc-info{flex:1;min-width:0}
+  .doc-name{font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .doc-meta{font-size:11.5px;color:var(--text-muted);margin-top:2px;font-family:var(--font-mono)}
+  .doc-status{font-size:11px;padding:3px 8px;border-radius:99px;font-weight:500;background:rgba(52,211,153,0.12);color:var(--green)}
+  .model-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+  .model-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;position:relative;transition:border-color .15s}
+  .model-card:hover{border-color:var(--border-glow)}
+  .model-card.active-model{border-color:var(--accent)}
+  .model-card-name{font-size:14px;font-weight:600;font-family:var(--font-mono);margin-bottom:4px}
+  .model-card-size{font-size:12px;color:var(--text-muted);margin-bottom:14px}
+  .model-card-actions{display:flex;gap:8px}
+  .active-badge{position:absolute;top:14px;right:14px;background:rgba(56,189,248,0.15);color:var(--accent);font-size:10px;padding:2px 8px;border-radius:99px;font-weight:600}
+  .pull-model-row{display:flex;gap:10px;margin-bottom:24px}
+  .text-input{flex:1;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:8px 12px;font-size:13px;font-family:var(--font-mono);outline:none;transition:border-color .15s}
+  .text-input:focus{border-color:var(--accent)}
+  .text-input::placeholder{color:var(--text-muted)}
+  .progress-bar{height:3px;background:var(--surface-3);border-radius:99px;overflow:hidden;margin-top:10px}
+  .progress-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));border-radius:99px;transition:width .3s ease}
+  #toast-container{position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:8px;z-index:1000;pointer-events:none}
+  .toast{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;font-size:13px;color:var(--text);display:flex;align-items:center;gap:8px;animation:toast-in .25s ease,toast-out .25s ease 2.5s forwards;pointer-events:auto;box-shadow:var(--shadow);max-width:320px}
+  .toast.ok{border-color:rgba(52,211,153,0.4)}
+  .toast.error{border-color:rgba(248,113,113,0.4)}
+  @keyframes toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes toast-out{from{opacity:1}to{opacity:0}}
+  .divider{height:1px;background:var(--border);margin:16px 0}
+  .text-mono{font-family:var(--font-mono)}
+</style>
+</head>
+<body>
+<aside id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-mark">
+      <div class="logo-icon">🔒</div>
+      <div>
+        <div class="logo-text">PrivateAI</div>
+        <div class="logo-sub">On-Premise Intelligence</div>
+      </div>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-label">Workspace</div>
+    <div class="nav-item active" data-view="chat" onclick="switchView('chat',this)"><span class="nav-icon">💬</span> Chat</div>
+    <div class="nav-item" data-view="documents" onclick="switchView('documents',this)"><span class="nav-icon">📂</span> Documents <span class="nav-badge" id="doc-count">0</span></div>
+    <div class="nav-item" data-view="models" onclick="switchView('models',this)"><span class="nav-icon">🧠</span> Models</div>
+    <div class="nav-item" data-view="collections" onclick="switchView('collections',this)"><span class="nav-icon">🗂</span> Collections</div>
+    <div class="divider"></div>
+    <div class="nav-label">System</div>
+    <div class="nav-item" data-view="settings" onclick="switchView('settings',this)"><span class="nav-icon">⚙️</span> Settings</div>
+  </nav>
+  <div class="sidebar-status">
+    <div class="status-row"><span class="status-dot pinging" id="dot-ollama"></span><span>Ollama</span><span id="label-ollama" style="margin-left:auto;font-size:11px;font-family:var(--font-mono)">—</span></div>
+    <div class="status-row"><span class="status-dot pinging" id="dot-chroma"></span><span>ChromaDB</span><span id="label-chroma" style="margin-left:auto;font-size:11px;font-family:var(--font-mono)">—</span></div>
+  </div>
+</aside>
+<main id="main">
+  <div id="topbar">
+    <div style="flex:1">
+      <div class="page-title" id="page-title">Chat</div>
+      <div class="page-sub" id="page-sub">Private, local inference — no data leaves your system</div>
+    </div>
+    <div class="toggle-rag" onclick="toggleRAG()">
+      <div class="toggle-switch" id="rag-toggle"></div>
+      <span id="rag-label" style="font-size:12px;color:var(--text-muted)">RAG off</span>
+    </div>
+    <button class="btn" onclick="checkHealth()" style="margin-left:10px;font-size:12px;padding:5px 10px">🔄 Refresh Status</button>
+        <select class="model-selector" id="model-select" onchange="onModelChange()"><option value="">Loading…</option></select>
+        <button class="btn" onclick="exportChat()" style="margin-left:10px">💾 Export</button><button class="btn" onclick="clearChatHistory()" style="margin-left:10px">🗑️ Clear</button>
+  </div>
+
+  <div id="view-chat" class="view active">
+    <div id="chat-messages">
+      <div class="empty-state" id="empty-state">
+        <div class="big-icon">🔒</div>
+        <h2>Your private AI, fully local</h2>
+        <p>All conversations and documents stay on your infrastructure. No telemetry, no cloud, no data leaves your network.</p>
+        <div class="suggestion-chips">
+          <div class="chip" onclick="sendChip(this)">Summarize a policy document</div>
+          <div class="chip" onclick="sendChip(this)">Explain a regulation</div>
+          <div class="chip" onclick="sendChip(this)">Draft an internal report</div>
+          <div class="chip" onclick="sendChip(this)">Answer from my documents</div>
+        </div>
+      </div>
+    </div>
+    <div id="chat-input-area">
+      <div class="input-row">
+        <textarea id="chat-input" placeholder="Ask anything…" rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+        <button class="send-btn" id="send-btn" onclick="sendMessage()">↑</button>
+      </div>
+      <div class="input-meta">
+        <div class="rag-indicator off" id="rag-status-indicator"><span>●</span> <span id="rag-status-text">Direct mode</span></div>
+        <div>Enter to send · Shift+Enter for newline</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="view-documents" class="view">
+    <div class="view-content">
+      <div class="view-header">
+        <h2>📂 Knowledge Base</h2>
+        <select class="model-selector" id="active-collection" onchange="loadDocuments()" style="max-width:160px;"><option value="documents">documents</option></select>
+        <button class="btn primary" onclick="document.getElementById('file-input').click()">＋ Upload Document</button>
+      </div>
+      <input type="file" id="file-input" style="display:none" multiple accept=".pdf,.docx,.txt,.md" onchange="handleFileSelect(event)" />
+      <div class="upload-zone" id="upload-zone"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="handleDrop(event)"
+        onclick="document.getElementById('file-input').click()">
+        <div class="icon">📄</div>
+        <h3>Drop files here or click to upload</h3>
+        <p>Supported: PDF, DOCX, TXT, MD · Chunked and stored in ChromaDB for semantic search</p>
+      </div>
+      <div class="doc-list" id="doc-list"><div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px">Loading…</div></div>
+    </div>
+  </div>
+
+  <div id="view-models" class="view">
+    <div class="view-content">
+      <div class="view-header"><h2>🧠 Model Management</h2></div>
+      <div class="pull-model-row">
+        <input type="text" class="text-input" id="pull-model-name" placeholder="Model name, e.g. llama3.2, mistral, gemma2…" />
+        <button class="btn primary" onclick="pullModel()">⬇ Pull Model</button>
+      </div>
+      <div id="pull-progress" style="display:none;margin-bottom:20px">
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:6px" id="pull-status">Pulling…</div>
+        <div class="progress-bar"><div class="progress-bar-fill" id="pull-bar" style="width:5%"></div></div>
+      </div>
+      <div class="model-grid" id="model-grid"><div style="color:var(--text-muted);font-size:13px">Loading models…</div></div>
+      <div class="divider"></div>
+      <div style="font-size:12px;color:var(--text-muted);line-height:1.7">
+        <strong style="color:var(--text-dim)">Popular models:</strong><br>
+        <code style="color:var(--accent)">llama3.2</code> · <code style="color:var(--accent)">mistral</code> · <code style="color:var(--accent)">gemma2</code> · <code style="color:var(--accent)">phi3</code> · <code style="color:var(--accent)">qwen2.5</code> · <code style="color:var(--accent)">nomic-embed-text</code> (required for RAG)
+      </div>
+    </div>
+  </div>
+
+  <div id="view-collections" class="view">
+    <div class="view-content">
+      <div class="view-header"><h2>🗂 ChromaDB Collections</h2><button class="btn primary" onclick="createCollection()">＋ New Collection</button></div>
+      <div id="collection-list" style="display:flex;flex-direction:column;gap:10px"><div style="color:var(--text-muted);font-size:13px">Loading…</div></div>
+    </div>
+  </div>
+
+  <div id="view-settings" class="view">
+    <div class="view-content">
+      <div class="view-header"><h2>⚙️ Settings</h2></div>
+      <div style="max-width:520px;display:flex;flex-direction:column;gap:20px">
+        <div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px">API Base URL</div>
+          <input type="text" class="text-input" id="api-base-url" placeholder="http://localhost:8000" style="width:100%" />
+          <div style="font-size:11.5px;color:var(--text-muted);margin-top:5px">Leave empty when running via Docker (same host).</div>
+        </div>
+        <div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px">Default Collection</div>
+          <input type="text" class="text-input" id="default-collection-input" value="documents" style="width:100%" />
+        </div>
+        <div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px">Temperature</div>
+          <input type="range" id="temp-slider" min="0" max="1" step="0.05" value="0.7" style="width:100%;accent-color:var(--accent)" oninput="document.getElementById('temp-val').textContent=this.value" />
+          <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Value: <span id="temp-val">0.7</span></div>
+        </div>
+        <button class="btn primary" onclick="saveSettings()">Save Settings</button>
+        <div class="divider"></div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px">🔒 Privacy Guarantee</div>
+          <div style="font-size:12.5px;color:var(--text-dim);line-height:1.7">All inference runs locally via Ollama. Document vectors are stored in your ChromaDB instance. No API calls to any external service. Designed for air-gapped or firewall-restricted environments.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+<div id="toast-container"></div>
+<script>
+let messages=[],ragEnabled=false,currentModel='',activeCollection='documents';
+let chatHistory = JSON.parse(localStorage.getItem('privateai_chat_history') || '[]');
+let settings={apiBase:'',defaultCollection:'documents',temperature:0.7};
+window.addEventListener('DOMContentLoaded',()=>{loadSettings();checkHealth();loadModels();setInterval(checkHealth,30000); loadChatHistory()});
+function apiBase(){return settings.apiBase||''}
+async function checkHealth(){
+  try{const r=await fetch(`${apiBase()}/health`);const d=await r.json();setDot('ollama',d.ollama==='ok');setDot('chroma',d.chromadb==='ok')}
+  catch{setDot('ollama',false);setDot('chroma',false)}
+}
+function setDot(s,ok){document.getElementById(`dot-${s}`).className='status-dot '+(ok?'ok':'error');document.getElementById(`label-${s}`).textContent=ok?'online':'offline'}
+const pageTitles={chat:['Chat','Private, local inference — no data leaves your system'],documents:['Knowledge Base','Upload and manage documents for RAG retrieval'],models:['Models','Manage local Ollama models'],collections:['Collections','ChromaDB vector collections'],settings:['Settings','Configure your PrivateAI instance']};
+function switchView(view,el){
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  el.classList.add('active');document.getElementById(`view-${view}`).classList.add('active');
+  const[title,sub]=pageTitles[view]||[view,''];
+  document.getElementById('page-title').textContent=title;document.getElementById('page-sub').textContent=sub;
+  if(view==='documents'){loadDocuments();loadCollectionOptions()}
+  if(view==='models')loadModels();
+  if(view==='collections')loadCollections();
+}
+function toggleRAG(){
+  ragEnabled=!ragEnabled;
+  document.getElementById('rag-toggle').classList.toggle('on',ragEnabled);
+  document.getElementById('rag-label').textContent=ragEnabled?'RAG on':'RAG off';
+  const ind=document.getElementById('rag-status-indicator');
+  ind.className=`rag-indicator ${ragEnabled?'on':'off'}`;
+  document.getElementById('rag-status-text').textContent=ragEnabled?`RAG: ${activeCollection}`:'Direct mode';
+}
+async function loadModels(){
+  try{
+    const r=await fetch(`${apiBase()}/api/models`);const data=await r.json();const models=data.models||[];
+    const sel=document.getElementById('model-select');sel.innerHTML='';
+    models.forEach(m=>{const o=document.createElement('option');o.value=m.name;o.textContent=m.name;if(!currentModel)currentModel=m.name;if(m.name===currentModel)o.selected=true;sel.appendChild(o)});
+    const grid=document.getElementById('model-grid');
+    if(!models.length){grid.innerHTML='<div style="color:var(--text-muted);font-size:13px;grid-column:1/-1">No models pulled yet.</div>';return}
+    grid.innerHTML=models.map(m=>{const size=m.details?.parameter_size||'—';const isActive=m.name===currentModel;return`<div class="model-card ${isActive?'active-model':''}">${isActive?'<span class="active-badge">Active</span>':''}<div class="model-card-name">${m.name}</div><div class="model-card-size">${size}</div><div class="model-card-actions"><button class="btn" style="font-size:12px;padding:5px 10px" onclick="selectModel('${m.name}')">Use</button><button class="btn danger" style="font-size:12px;padding:5px 10px" onclick="deleteModel('${m.name}')">Remove</button></div></div>`}).join('')
+  }catch(e){console.error(e)}
+}
+function onModelChange(){currentModel=document.getElementById('model-select').value;toast('✅ Model: '+currentModel,'ok')}
+function selectModel(name){currentModel=name;document.getElementById('model-select').value=name;loadModels();toast('✅ Model set to '+name,'ok')}
+async function deleteModel(name){if(!confirm(`Remove "${name}"?`))return;await fetch(`${apiBase()}/api/models/${encodeURIComponent(name)}`,{method:'DELETE'});toast('🗑 Removed '+name,'ok');loadModels()}
+async function pullModel(){
+  const name=document.getElementById('pull-model-name').value.trim();if(!name)return;
+  document.getElementById('pull-progress').style.display='block';
+  document.getElementById('pull-status').textContent=`Pulling ${name}…`;
+  document.getElementById('pull-bar').style.width='5%';
+  try{
+    const r=await fetch(`${apiBase()}/api/models/pull`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+    const reader=r.body.getReader();const dec=new TextDecoder();
+    while(true){const{done,value}=await reader.read();if(done)break;
+      dec.decode(value).trim().split('\n').forEach(line=>{try{const j=JSON.parse(line);if(j.status)document.getElementById('pull-status').textContent=`${name}: ${j.status}`;if(j.total&&j.completed)document.getElementById('pull-bar').style.width=Math.round(j.completed/j.total*100)+'%'}catch{}})
+    }
+    document.getElementById('pull-bar').style.width='100%';toast(`✅ ${name} ready`,'ok');loadModels()
+  }catch(e){toast('Pull failed: '+e.message,'error')}
+  finally{setTimeout(()=>document.getElementById('pull-progress').style.display='none',2000)}
+}
+function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}}
+function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,140)+'px'}
+function sendChip(el){document.getElementById('chat-input').value=el.textContent;sendMessage()}
+
+function loadChatHistory() {
+    if (chatHistory.length > 0) {
+        document.getElementById('empty-state')?.remove();
+        chatHistory.forEach(msg => renderMessage(msg));
+    }
+}
+
+function exportChat() {
+    if (chatHistory.length === 0) {
+        alert("No chat history to export!");
+        return;
+    }
+    let mdContent = "# PrivateAI Chat Export\n\n";
+    chatHistory.forEach(msg => {
+        const role = msg.role === 'user' ? '👤 **You**' : '🤖 **AI**';
+        mdContent += `### ${role}\n\n${msg.content}\n\n---\n\n`;
+    });
+    
+    const blob = new Blob([mdContent], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `privateai-chat-${new Date().toISOString().slice(0,10)}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function clearChatHistory() {
+    if(confirm('Clear all chat history?')) {
+        chatHistory = [];
+        localStorage.removeItem('privateai_chat_history');
+        document.getElementById('chat-messages').innerHTML = `
+          <div class="empty-state" id="empty-state">
+            <div class="big-icon">🔒</div>
+            <h2>Your private AI, fully local</h2>
+            <p>All conversations and documents stay on your infrastructure. No telemetry, no cloud, no data leaves your network.</p>
+            <div class="suggestion-chips">
+              <div class="chip" onclick="sendChip(this)">Summarize a policy document</div>
+              <div class="chip" onclick="sendChip(this)">Explain a regulation</div>
+              <div class="chip" onclick="sendChip(this)">Draft an internal report</div>
+              <div class="chip" onclick="sendChip(this)">Answer from my documents</div>
+            </div>
+          </div>`;
+    }
+}
+
+async function sendMessage(){
+  const input=document.getElementById('chat-input');const text=input.value.trim();
+  if(!text||!currentModel)return;
+  document.getElementById('empty-state')?.remove();input.value='';input.style.height='auto';
+  messages.push({role:'user',content:text}); chatHistory.push({role:'user',content:text}); localStorage.setItem('privateai_chat_history', JSON.stringify(chatHistory)); renderMessage({role:'user',content:text});
+  const tid=renderTyping();document.getElementById('send-btn').disabled=true;
+  try{
+    const r=await fetch(`${apiBase()}/api/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages,model:currentModel,use_rag:ragEnabled,collection:activeCollection,stream:true,temperature:settings.temperature})});
+    document.getElementById(tid)?.remove();
+    const aid=renderMessage({role:'assistant',content:''},true);
+    const bubble=document.querySelector(`#${aid} .msg-bubble`);let full='';
+    const reader=r.body.getReader();const dec=new TextDecoder();
+    while(true){const{done,value}=await reader.read();if(done)break;
+      dec.decode(value).split('\n').forEach(line=>{if(!line.startsWith('data: '))return;const d=line.slice(6);if(d==='[DONE]')return;try{const j=JSON.parse(d);full+=(j?.message?.content||'');bubble.innerHTML=formatMd(full)+'<span style="opacity:0.4">▌</span>';scrollBottom()}catch{}})
+    }
+    bubble.innerHTML=formatMd(full); messages.push({role:'assistant',content:full}); chatHistory.push({role:'assistant',content:full}); localStorage.setItem('privateai_chat_history', JSON.stringify(chatHistory));
+  }catch(e){document.getElementById(tid)?.remove();renderMessage({role:'assistant',content:`⚠️ ${e.message}`})}
+  finally{document.getElementById('send-btn').disabled=false;scrollBottom()}
+}
+function renderMessage({role,content},streaming=false){
+  const id='msg-'+Date.now()+Math.random().toString(36).slice(2);
+  const av=role==='user'?'👤':'🤖';
+  document.getElementById('chat-messages').insertAdjacentHTML('beforeend',`<div class="msg ${role}" id="${id}"><div class="msg-avatar">${av}</div><div class="msg-bubble">${streaming?'':formatMd(content)}</div></div>`);
+  scrollBottom();return id
+}
+function renderTyping(){const id='typing-'+Date.now();document.getElementById('chat-messages').insertAdjacentHTML('beforeend',`<div class="msg assistant" id="${id}"><div class="msg-avatar">🤖</div><div class="msg-bubble"><div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div></div></div>`);scrollBottom();return id}
+function scrollBottom(){const el=document.getElementById('chat-messages');el.scrollTop=el.scrollHeight}
+function formatMd(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/```([\s\S]*?)```/g,'<pre><code>$1</code></pre>').replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>').replace(/\n/g,'<br>')}
+async function loadDocuments(){
+  const col=document.getElementById('active-collection')?.value||'documents';activeCollection=col;
+  try{const r=await fetch(`${apiBase()}/api/documents?collection=${col}`);const data=await r.json();const docs=data.documents||[];
+    document.getElementById('doc-count').textContent=docs.length;
+    const list=document.getElementById('doc-list');
+    if(!docs.length){list.innerHTML='<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:20px">No documents yet. Upload files above.</div>';return}
+    list.innerHTML=docs.map(d=>{const ext=(d.source||'').split('.').pop()||'doc';const icon={pdf:'📕',docx:'📘',txt:'📄',md:'📝'}[ext]||'📄';return`<div class="doc-card"><div class="doc-icon">${icon}</div><div class="doc-info"><div class="doc-name">${d.source}</div><div class="doc-meta">${d.doc_id}</div></div><span class="doc-status">indexed</span><button class="btn danger" style="font-size:12px;padding:5px 10px;margin-left:8px" onclick="deleteDoc('${d.doc_id}','${col}')">Remove</button></div>`}).join('')
+  }catch(e){console.error(e)}
+}
+async function loadCollectionOptions(){
+  try{const r=await fetch(`${apiBase()}/api/collections`);const data=await r.json();const sel=document.getElementById('active-collection');if(!sel)return;const cur=sel.value;sel.innerHTML=data.collections.map(c=>`<option value="${c}" ${c===cur?'selected':''}>${c}</option>`).join('')}catch{}
+}
+function handleFileSelect(e){uploadFiles(Array.from(e.target.files))}
+function handleDrop(e){e.preventDefault();document.getElementById('upload-zone').classList.remove('drag-over');uploadFiles(Array.from(e.dataTransfer.files))}
+async function uploadFiles(files){
+  const col=document.getElementById('active-collection')?.value||'documents';
+  for(const file of files){const fd=new FormData();fd.append('file',file);fd.append('collection',col);
+    try{const r=await fetch(`${apiBase()}/api/documents/upload?collection=${col}`,{method:'POST',body:fd});if(r.ok){toast(`📄 Uploading ${file.name}…`,'ok');setTimeout(loadDocuments,2000)}else toast(`Failed: ${file.name}`,'error')}
+    catch{toast('Upload error','error')}
+  }
+}
+async function deleteDoc(docId,col){if(!confirm('Remove from knowledge base?'))return;await fetch(`${apiBase()}/api/documents/${docId}?collection=${col}`,{method:'DELETE'});toast('🗑 Removed','ok');loadDocuments()}
+async function loadCollections(){
+  try{const r=await fetch(`${apiBase()}/api/collections`);const data=await r.json();const list=document.getElementById('collection-list');
+    if(!data.collections.length){list.innerHTML='<div style="color:var(--text-muted);font-size:13px">No collections yet.</div>';return}
+    list.innerHTML=data.collections.map(c=>`<div class="doc-card"><div class="doc-icon">🗂</div><div class="doc-info"><div class="doc-name text-mono">${c}</div></div><button class="btn danger" style="font-size:12px;padding:5px 10px" onclick="deleteCollection('${c}')">Delete</button></div>`).join('')
+  }catch{}
+}
+async function createCollection(){const name=prompt('Collection name:');if(!name)return;await fetch(`${apiBase()}/api/collections`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});toast(`✅ "${name}" created`,'ok');loadCollections()}
+async function deleteCollection(name){if(!confirm(`Delete "${name}" and all vectors?`))return;await fetch(`${apiBase()}/api/collections/${name}`,{method:'DELETE'});toast('🗑 Deleted','ok');loadCollections()}
+function loadSettings(){const s=localStorage.getItem('privateai_settings');if(s)settings={...settings,...JSON.parse(s)};document.getElementById('api-base-url').value=settings.apiBase||'';document.getElementById('default-collection-input').value=settings.defaultCollection||'documents';document.getElementById('temp-slider').value=settings.temperature??0.7;document.getElementById('temp-val').textContent=settings.temperature??0.7;activeCollection=settings.defaultCollection||'documents'}
+function saveSettings(){settings.apiBase=document.getElementById('api-base-url').value.trim();settings.defaultCollection=document.getElementById('default-collection-input').value.trim()||'documents';settings.temperature=parseFloat(document.getElementById('temp-slider').value);localStorage.setItem('privateai_settings',JSON.stringify(settings));activeCollection=settings.defaultCollection;checkHealth();toast('✅ Settings saved','ok')}
+function toast(msg,type='ok'){const el=document.createElement('div');el.className=`toast ${type}`;el.textContent=msg;document.getElementById('toast-container').appendChild(el);setTimeout(()=>el.remove(),3000)}
+</script>
+</body>
+</html>

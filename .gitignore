@@ -1,0 +1,24 @@
+# Environment variables (NEVER push secrets)
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Docker persistent data (if any local data was saved)
+chroma_data/
+ollama_data/
+
+# IDE & OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

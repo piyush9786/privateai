@@ -1,0 +1,112 @@
+version: "3.9"
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: privateai_ollama
+    restart: unless-stopped
+    ports:
+      - "11435:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    networks:
+      - privateai_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  chromadb:
+    image: chromadb/chroma:0.5.15
+    container_name: privateai_chromadb
+    restart: unless-stopped
+    ports:
+      - "8003:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+      - ALLOW_RESET=TRUE
+    networks:
+      - privateai_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: privateai_backend
+    restart: unless-stopped
+    ports:
+      - "8002:8000"
+    volumes:
+      - ./backend:/app
+      - upload_data:/app/uploads
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - CHROMADB_HOST=chromadb
+      - CHROMADB_PORT=8000
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-llama3.2}
+      - EMBED_MODEL=${EMBED_MODEL:-nomic-embed-text}
+      - APP_SECRET=${APP_SECRET:-changeme-in-production}
+      - CHUNK_SIZE=${CHUNK_SIZE:-1000}
+      - CHUNK_OVERLAP=${CHUNK_OVERLAP:-200}
+    depends_on:
+      - ollama
+      - chromadb
+    networks:
+      - privateai_net
+
+  nginx:
+    image: nginx:alpine
+    container_name: privateai_nginx
+    restart: unless-stopped
+    ports:
+      - "3001:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+    networks:
+      - privateai_net
+
+  model-init:
+    image: curlimages/curl:latest
+    container_name: privateai_model_init
+    restart: "no"
+    environment:
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-llama3.2}
+      - EMBED_MODEL=${EMBED_MODEL:-nomic-embed-text}
+    entrypoint: >
+      sh -c "
+        echo 'Waiting for Ollama...' &&
+        until curl -sf http://ollama:11434/api/tags; do sleep 5; done &&
+        echo 'Pulling LLM model...' &&
+        curl -s -X POST http://ollama:11434/api/pull -d '{\"name\":\"${DEFAULT_MODEL:-llama3.2}\"}' &&
+        echo 'Pulling embed model...' &&
+        curl -s -X POST http://ollama:11434/api/pull -d '{\"name\":\"${EMBED_MODEL:-nomic-embed-text}\"}' &&
+        echo 'Models ready!'
+      "
+    depends_on:
+      - ollama
+    networks:
+      - privateai_net
+
+volumes:
+  ollama_data:
+  chroma_data:
+  upload_data:
+
+networks:
+  privateai_net:
+    driver: bridge
