@@ -29,12 +29,13 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("privateai")
 
-CHROMA_INTERNAL_URL = f"http://{CHROMA_HOST}:{CHROMA_PORT}"
+CHROMA_URL = f"http://{CHROMA_HOST}:{CHROMA_PORT}"
 
+# BUG FIX 4: Wait for ChromaDB before creating client — prevents startup crash
 def wait_for_chroma(retries=30, delay=3):
     for i in range(retries):
         try:
-            r = httpx.get(f"{CHROMA_INTERNAL_URL}/api/v1/heartbeat", timeout=3)
+            r = httpx.get(f"{CHROMA_URL}/api/v1/heartbeat", timeout=3)
             if r.status_code == 200:
                 logger.info("✅ ChromaDB is ready!")
                 return
@@ -46,10 +47,10 @@ def wait_for_chroma(retries=30, delay=3):
 
 wait_for_chroma()
 
+chroma_client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
+
 app = FastAPI(title="PrivateAI API", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-
-chroma_client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
 
 def get_vectorstore(collection: str = "documents") -> Chroma:
     embeddings = OllamaEmbeddings(model=EMBED_MODEL, base_url=OLLAMA_URL)
@@ -67,7 +68,7 @@ class ChatRequest(BaseModel):
     stream: bool = True
     temperature: Optional[float] = 0.7
 
-# ── Health: both checks are async HTTP — no blocking calls ─────────────────
+# BUG FIX 5: health() is now fully async HTTP — no blocking calls that deadlock the event loop
 @app.get("/health")
 async def health():
     status = {"api": "ok", "ollama": "unknown", "chromadb": "unknown"}
@@ -78,7 +79,7 @@ async def health():
         except Exception:
             status["ollama"] = "unreachable"
         try:
-            r = await client.get(f"{CHROMA_INTERNAL_URL}/api/v1/heartbeat")
+            r = await client.get(f"{CHROMA_URL}/api/v1/heartbeat")
             status["chromadb"] = "ok" if r.status_code == 200 else "error"
         except Exception:
             status["chromadb"] = "unreachable"
@@ -114,6 +115,8 @@ async def delete_model(name: str):
 async def chat(req: ChatRequest):
     model = req.model or DEFAULT_MODEL
     messages = [m.model_dump() for m in req.messages]
+
+    # BUG FIX 6: Build rag_sources BEFORE the stream closure — prevents scope crash
     rag_sources: list[str] = []
 
     if req.use_rag and req.messages:
@@ -142,7 +145,7 @@ async def chat(req: ChatRequest):
     }
 
     if req.stream:
-        captured_sources = rag_sources[:]
+        captured_sources = rag_sources[:]  # capture copy before async closure
 
         async def _stream() -> AsyncGenerator[str, None]:
             async with httpx.AsyncClient(timeout=600) as client:

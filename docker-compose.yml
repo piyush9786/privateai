@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   ollama:
     image: ollama/ollama:latest
@@ -13,12 +11,6 @@ services:
       - OLLAMA_HOST=0.0.0.0
     networks:
       - privateai_net
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
 
   chromadb:
     image: chromadb/chroma:0.5.15
@@ -34,11 +26,6 @@ services:
       - ALLOW_RESET=TRUE
     networks:
       - privateai_net
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
-      interval: 20s
-      timeout: 10s
-      retries: 5
 
   backend:
     build:
