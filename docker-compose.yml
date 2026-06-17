@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   ollama:
     image: ollama/ollama:latest
@@ -11,6 +13,12 @@ services:
       - OLLAMA_HOST=0.0.0.0
     networks:
       - privateai_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
   chromadb:
     image: chromadb/chroma:0.5.15
@@ -26,6 +34,11 @@ services:
       - ALLOW_RESET=TRUE
     networks:
       - privateai_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
 
   backend:
     build:
@@ -38,6 +51,7 @@ services:
     volumes:
       - ./backend:/app
       - upload_data:/app/uploads
+      - export_data:/app/exports
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
       - CHROMADB_HOST=chromadb
@@ -76,13 +90,13 @@ services:
       - EMBED_MODEL=${EMBED_MODEL:-nomic-embed-text}
     entrypoint: >
       sh -c "
-        echo 'Waiting for Ollama...' &&
-        until curl -sf http://ollama:11434/api/tags; do sleep 5; done &&
-        echo 'Pulling LLM model...' &&
-        curl -s -X POST http://ollama:11434/api/pull -d '{\"name\":\"${DEFAULT_MODEL:-llama3.2}\"}' &&
-        echo 'Pulling embed model...' &&
-        curl -s -X POST http://ollama:11434/api/pull -d '{\"name\":\"${EMBED_MODEL:-nomic-embed-text}\"}' &&
-        echo 'Models ready!'
+      echo 'Waiting for Ollama...' &&
+      until curl -sf http://ollama:11434/api/tags; do sleep 5; done &&
+      echo 'Pulling LLM model...' &&
+      curl -s -X POST http://ollama:11434/api/pull -d '{\"name\":\"${DEFAULT_MODEL:-llama3.2}\"}' &&
+      echo 'Pulling embed model...' &&
+      curl -s -X POST http://ollama:11434/api/pull -d '{\"name\":\"${EMBED_MODEL:-nomic-embed-text}\"}' &&
+      echo 'Models ready!'
       "
     depends_on:
       - ollama
@@ -93,6 +107,7 @@ volumes:
   ollama_data:
   chroma_data:
   upload_data:
+  export_data:
 
 networks:
   privateai_net:

@@ -3,10 +3,9 @@ FROM python:3.11-slim
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
-    poppler-utils \
-    tesseract-ocr \
-    libmagic1 \
-    curl \
+    gcc g++ curl libgomp1 \
+    portaudio19-dev python3-pyaudio \
+    ffmpeg libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -14,6 +13,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-EXPOSE 8000
+RUN mkdir -p /app/uploads /app/exports
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
