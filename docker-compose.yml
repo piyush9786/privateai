@@ -96,6 +96,8 @@ services:
       curl -s -X POST http://ollama:11434/api/pull -d '{\"name\":\"${DEFAULT_MODEL:-llama3.2}\"}' &&
       echo 'Pulling embed model...' &&
       curl -s -X POST http://ollama:11434/api/pull -d '{\"name\":\"${EMBED_MODEL:-nomic-embed-text}\"}' &&
+      echo 'Pulling Qwen3 8B...' &&
+      curl -s -X POST http://ollama:11434/api/pull -d '{\"name\":\"qwen3:8b\"}' &&
       echo 'Models ready!'
       "
     depends_on:
