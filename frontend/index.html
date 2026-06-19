@@ -4,208 +4,300 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>PrivateAI</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+:root{
+  --bg:#FAF8F3;
+  --surface:#FFFFFF;
+  --surface-soft:#F3EFE6;
+  --line:#E6E0D2;
+  --line-soft:#EFEAE0;
+  --ink:#2B2620;
+  --ink-dim:#6B6356;
+  --ink-faint:#9A9486;
+  --accent:#C5631E;
+  --accent-soft:#F1E2D2;
+  --accent-dark:#9B4D16;
+  --sage:#5F7D58;
+  --sage-soft:#E4EBE0;
+  --font-display:'Source Serif 4', Georgia, serif;
+  --font-body:'Inter', 'Segoe UI', sans-serif;
+  --font-mono:'JetBrains Mono', 'Consolas', monospace;
+}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',sans-serif;background:#0d1117;color:#e6edf3;display:flex;height:100vh;overflow:hidden}
-#sidebar{width:240px;background:#161b22;border-right:1px solid #30363d;display:flex;flex-direction:column;padding:12px;gap:8px;overflow-y:auto}
-#sidebar h2{color:#58a6ff;font-size:14px;text-align:center;padding:8px 0;border-bottom:1px solid #30363d;margin-bottom:4px}
-.side-btn{background:#21262d;border:1px solid #30363d;color:#e6edf3;padding:10px 12px;border-radius:8px;cursor:pointer;font-size:13px;text-align:left;transition:all .2s}
-.side-btn:hover,.side-btn.active{background:#1f6feb;border-color:#58a6ff;color:#fff}
-.side-btn .icon{margin-right:8px}
-#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
-#toolbar{background:#161b22;border-bottom:1px solid #30363d;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-#toolbar select{background:#21262d;border:1px solid #30363d;color:#e6edf3;padding:6px 10px;border-radius:6px;font-size:13px}
-#rag-toggle{display:flex;align-items:center;gap:6px;font-size:13px}
-#rag-toggle input{width:16px;height:16px;cursor:pointer}
-#rag-info{font-size:12px;color:#8b949e}
-#content-area{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
-.panel{display:none}
-.panel.active{display:flex;flex-direction:column;flex:1;gap:12px}
-/* CHAT */
-#chat-messages{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;min-height:0}
-.msg{max-width:75%;padding:12px 16px;border-radius:12px;font-size:14px;line-height:1.5;word-wrap:break-word}
-.msg.user{align-self:flex-end;background:#1f6feb;color:#fff;border-bottom-right-radius:4px}
-.msg.ai{align-self:flex-start;background:#21262d;border:1px solid #30363d;border-bottom-left-radius:4px}
-.msg.ai pre{background:#0d1117;padding:10px;border-radius:6px;overflow-x:auto;font-size:12px;margin-top:8px}
-.msg img{max-width:100%;border-radius:8px;margin-top:8px}
-#chat-input-row{display:flex;gap:8px;align-items:center}
-#chat-input{flex:1;background:#21262d;border:1px solid #30363d;color:#e6edf3;padding:12px;border-radius:10px;font-size:14px;resize:none;min-height:44px;max-height:120px}
-#chat-input:focus{outline:none;border-color:#58a6ff}
-.send-btn,#mic-btn{background:#238636;border:none;color:#fff;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:14px;transition:background .2s}
-.send-btn:hover{background:#2ea043}
-#mic-btn{background:#6e40c9;padding:10px 14px}
-#mic-btn.recording{background:#da3633;animation:pulse 1s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
-/* PANELS */
-.panel-card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px}
-.panel-card h3{color:#58a6ff;font-size:15px}
-.drop-zone{border:2px dashed #30363d;border-radius:10px;padding:30px;text-align:center;cursor:pointer;transition:all .2s;color:#8b949e;font-size:14px}
-.drop-zone:hover,.drop-zone.over{border-color:#58a6ff;background:#161b22;color:#e6edf3}
-.result-box{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;font-size:13px;max-height:300px;overflow-y:auto;white-space:pre-wrap;color:#c9d1d9}
-.input-row{display:flex;gap:8px}
-.input-row input,.input-row select,.panel-input{flex:1;background:#21262d;border:1px solid #30363d;color:#e6edf3;padding:10px;border-radius:8px;font-size:13px}
-.input-row input:focus,.panel-input:focus{outline:none;border-color:#58a6ff}
-.action-btn{background:#1f6feb;border:none;color:#fff;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:13px;transition:background .2s;white-space:nowrap}
-.action-btn:hover{background:#388bfd}
-.action-btn.green{background:#238636}
-.action-btn.green:hover{background:#2ea043}
-.action-btn.purple{background:#6e40c9}
-.download-link{display:inline-block;background:#238636;color:#fff;padding:8px 16px;border-radius:8px;text-decoration:none;font-size:13px;margin-top:4px}
-.chart-preview{max-width:100%;border-radius:10px;margin-top:8px;border:1px solid #30363d}
-.tag{display:inline-block;background:#21262d;border:1px solid #30363d;padding:2px 8px;border-radius:12px;font-size:11px;color:#8b949e;margin:2px}
-.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
-.stat-card{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px;text-align:center}
-.stat-card .val{font-size:22px;font-weight:bold;color:#58a6ff}
-.stat-card .lbl{font-size:11px;color:#8b949e;margin-top:2px}
-#chart-canvas-container{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px;max-height:350px}
+body{
+  font-family:var(--font-body);
+  background:var(--bg);
+  color:var(--ink);
+  height:100vh;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+::-webkit-scrollbar{width:7px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+
+/* ── TOP BAR ───────────────────────────────────────────────────────── */
+#topbar{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  padding:14px 22px;
+  border-bottom:1px solid var(--line);
+  background:var(--surface);
+  flex-shrink:0;
+}
+#brand{display:flex;align-items:center;gap:9px}
+#brand .mark{
+  width:24px;height:24px;border-radius:7px;
+  background:var(--accent);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+#brand .mark svg{width:13px;height:13px}
+#brand h1{font-family:var(--font-display);font-weight:600;font-size:16px;color:var(--ink)}
+#model-select{
+  margin-left:auto;
+  background:var(--surface-soft);
+  border:1px solid var(--line);
+  color:var(--ink-dim);
+  padding:6px 10px;
+  border-radius:7px;
+  font-size:12.5px;
+  font-family:var(--font-body);
+}
+#model-select:focus{outline:none;border-color:var(--accent)}
+#vault-info{
+  font-size:12px;
+  color:var(--ink-faint);
+  font-family:var(--font-mono);
+  white-space:nowrap;
+}
+#new-chat-btn{
+  background:transparent;border:1px solid var(--line);color:var(--ink-dim);
+  padding:6px 13px;border-radius:7px;font-size:12.5px;cursor:pointer;
+  font-family:var(--font-body);
+}
+#new-chat-btn:hover{background:var(--surface-soft)}
+#memories-btn{
+  background:transparent;border:1px solid var(--line);color:var(--ink-dim);
+  padding:6px 13px;border-radius:7px;font-size:12.5px;cursor:pointer;
+  font-family:var(--font-body);
+}
+#memories-btn:hover{background:var(--surface-soft)}
+
+#memory-overlay{
+  display:none;position:fixed;inset:0;background:rgba(43,38,32,.35);
+  z-index:50;align-items:center;justify-content:center;
+}
+#memory-overlay.open{display:flex}
+#memory-panel{
+  background:var(--surface);border-radius:14px;border:1px solid var(--line);
+  width:90%;max-width:480px;max-height:70vh;display:flex;flex-direction:column;
+  padding:22px 22px 18px;box-shadow:0 8px 30px rgba(43,38,32,.18);
+}
+#memory-panel-head{display:flex;align-items:center;justify-content:space-between}
+#memory-panel-head h3{font-family:var(--font-display);font-size:17px;font-weight:600;color:var(--ink)}
+#memory-close-btn{background:none;border:none;font-size:20px;color:var(--ink-faint);cursor:pointer;line-height:1}
+#memory-panel-desc{font-size:12.5px;color:var(--ink-faint);margin:6px 0 14px;line-height:1.5}
+#memory-list{overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+.memory-row{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:10px;
+  background:var(--surface-soft);border:1px solid var(--line-soft);
+  border-radius:8px;padding:10px 12px;
+}
+.memory-row .txt{font-size:13px;color:var(--ink);line-height:1.5}
+.memory-row button{
+  background:none;border:none;color:var(--ink-faint);cursor:pointer;
+  font-size:12px;flex-shrink:0;padding:2px 6px;
+}
+.memory-row button:hover{color:var(--accent-dark)}
+#memory-empty{font-size:13px;color:var(--ink-faint);text-align:center;padding:24px 0}
+
+/* ── CHAT AREA ─────────────────────────────────────────────────────── */
+#chat-scroll{flex:1;overflow-y:auto;display:flex;justify-content:center}
+#chat-inner{width:100%;max-width:720px;padding:28px 20px 12px;display:flex;flex-direction:column;gap:20px}
+
+#empty-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  flex:1;text-align:center;gap:10px;padding:60px 20px;color:var(--ink-faint);
+}
+#empty-state .mark-lg{
+  width:46px;height:46px;border-radius:13px;background:var(--accent);
+  display:flex;align-items:center;justify-content:center;margin-bottom:8px;
+}
+#empty-state .mark-lg svg{width:24px;height:24px}
+#empty-state h2{font-family:var(--font-display);font-weight:600;font-size:20px;color:var(--ink)}
+#empty-state p{font-size:13.5px;max-width:380px;line-height:1.6}
+#suggestions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:6px}
+.suggestion-chip{
+  background:var(--surface);border:1px solid var(--line);color:var(--ink-dim);
+  padding:8px 14px;border-radius:20px;font-size:12.5px;cursor:pointer;
+  font-family:var(--font-body);transition:border-color .15s, color .15s;
+}
+.suggestion-chip:hover{border-color:var(--accent);color:var(--accent-dark)}
+
+.turn{display:flex;flex-direction:column;gap:8px}
+.turn.user{align-items:flex-end}
+.turn.assistant{align-items:flex-start}
+.bubble{
+  max-width:88%;
+  padding:13px 16px;
+  border-radius:12px;
+  font-size:14.5px;
+  line-height:1.65;
+}
+.turn.user .bubble{background:var(--accent);color:#FFF6EC;border-bottom-right-radius:4px;font-weight:450}
+.turn.assistant .bubble{background:transparent;color:var(--ink);padding:2px 2px 0;max-width:100%}
+.turn.assistant .bubble pre{
+  background:var(--surface-soft);border:1px solid var(--line-soft);
+  padding:12px;border-radius:8px;overflow-x:auto;font-size:12.5px;
+  font-family:var(--font-mono);margin:8px 0;
+}
+.turn.assistant .bubble img{max-width:100%;border-radius:10px;margin-top:10px;border:1px solid var(--line)}
+
+/* status trail */
+.status-trail{display:flex;flex-direction:column;gap:5px;margin-bottom:2px}
+.status-line{
+  display:flex;align-items:center;gap:8px;
+  font-size:12.5px;color:var(--ink-faint);
+  font-family:var(--font-mono);
+}
+.status-line .spin{
+  width:11px;height:11px;border-radius:50%;
+  border:1.5px solid var(--line);border-top-color:var(--accent);
+  animation:spin .7s linear infinite;
+  flex-shrink:0;
+}
+.status-line.done{color:var(--sage)}
+.status-line.done .spin{display:none}
+.status-line.done::before{content:'✓';color:var(--sage);font-size:11px;font-weight:600}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.download-card{
+  display:inline-flex;align-items:center;gap:8px;
+  background:var(--sage-soft);border:1px solid var(--line);
+  padding:8px 14px;border-radius:8px;margin-top:8px;
+  text-decoration:none;color:var(--ink);font-size:12.5px;font-weight:500;
+}
+.download-card:hover{border-color:var(--sage)}
+
+.memory-proposal-card{
+  display:flex;flex-direction:column;gap:8px;
+  background:var(--surface-soft);border:1px solid var(--line);
+  border-radius:10px;padding:13px 15px;margin-top:10px;max-width:380px;
+}
+.memory-proposal-label{
+  font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;
+  color:var(--ink-faint);font-weight:600;
+}
+.memory-proposal-text{
+  font-size:13.5px;color:var(--ink);line-height:1.5;
+  font-style:italic;
+}
+.memory-proposal-actions{display:flex;gap:8px}
+.memory-btn{
+  border:none;border-radius:7px;padding:7px 13px;font-size:12.5px;
+  font-weight:500;cursor:pointer;font-family:var(--font-body);
+  transition:opacity .15s;
+}
+.memory-btn:disabled{opacity:.5;cursor:default}
+.memory-btn.approve{background:var(--sage);color:#fff}
+.memory-btn.reject{background:transparent;border:1px solid var(--line);color:var(--ink-dim)}
+.memory-proposal-card.resolved-yes{border-color:var(--sage)}
+.memory-proposal-card.resolved-no{opacity:.6}
+.memory-proposal-status{font-size:12px;color:var(--ink-faint);font-style:normal}
+
+/* ── COMPOSER ──────────────────────────────────────────────────────── */
+#composer-wrap{display:flex;justify-content:center;padding:14px 20px 20px;flex-shrink:0;background:var(--bg)}
+#composer{
+  width:100%;max-width:720px;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:10px 10px 10px 16px;
+  display:flex;align-items:flex-end;gap:8px;
+  box-shadow:0 1px 2px rgba(43,38,32,.04);
+}
+#chat-input{
+  flex:1;border:none;outline:none;resize:none;
+  background:transparent;color:var(--ink);
+  font-family:var(--font-body);font-size:14.5px;line-height:1.5;
+  max-height:140px;padding:8px 0;
+}
+#chat-input::placeholder{color:var(--ink-faint)}
+#mic-btn,#send-btn{
+  border:none;border-radius:9px;cursor:pointer;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  width:34px;height:34px;transition:background .15s, opacity .15s;
+}
+#mic-btn{background:var(--surface-soft);color:var(--ink-dim)}
+#mic-btn:hover{background:var(--line-soft)}
+#mic-btn.recording{background:#E8C4B0;color:var(--accent-dark);animation:pulse 1.1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+#send-btn{background:var(--accent);color:#FFF6EC}
+#send-btn:hover{opacity:.9}
+#send-btn:disabled{background:var(--line);cursor:default}
+#composer-hint{
+  text-align:center;font-size:11px;color:var(--ink-faint);
+  margin-top:8px;
+}
 </style>
 </head>
 <body>
 
-<div id="sidebar">
-  <h2>🔒 PrivateAI</h2>
-  <button class="side-btn active" onclick="switchPanel('chat')" id="btn-chat"><span class="icon">💬</span>Chat</button>
-  <button class="side-btn" onclick="switchPanel('upload')" id="btn-upload"><span class="icon">📂</span>File Upload & RAG</button>
-  <button class="side-btn" onclick="switchPanel('pdf')" id="btn-pdf"><span class="icon">📄</span>PDF Reader</button>
-  <button class="side-btn" onclick="switchPanel('excel-read')" id="btn-excel-read"><span class="icon">📊</span>Excel Reader</button>
-  <button class="side-btn" onclick="switchPanel('excel-make')" id="btn-excel-make"><span class="icon">📋</span>Excel Maker</button>
-  <button class="side-btn" onclick="switchPanel('charts')" id="btn-charts"><span class="icon">📈</span>Charts</button>
-  <button class="side-btn" onclick="switchPanel('flowchart')" id="btn-flowchart"><span class="icon">🔀</span>Flowchart</button>
-  <button class="side-btn" onclick="switchPanel('image')" id="btn-image"><span class="icon">🎨</span>Image Generator</button>
+<div id="topbar">
+  <div id="brand">
+    <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#FFF6EC" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.6" fill="#FFF6EC"/></svg></div>
+    <h1>PrivateAI</h1>
+  </div>
+  <select id="model-select"><option value="llama3.2">llama3.2</option></select>
+  <span id="vault-info">0 documents indexed</span>
+  <button id="memories-btn" onclick="openMemoryPanel()">Memories</button>
+  <button id="new-chat-btn" onclick="newChat()">New chat</button>
 </div>
 
-<div id="main">
-  <div id="toolbar">
-    <label style="font-size:13px;color:#8b949e">Model:</label>
-    <select id="model-select"><option value="llama3.2">llama3.2</option></select>
-    <label id="rag-toggle"><input type="checkbox" id="rag-check"/> Use RAG</label>
-    <span id="rag-info">📚 RAG: 0 docs</span>
-    <button class="action-btn" style="padding:6px 12px;font-size:12px" onclick="clearRag()">🗑 Clear RAG</button>
+<div id="memory-overlay" onclick="closeMemoryPanel(event)">
+  <div id="memory-panel" onclick="event.stopPropagation()">
+    <div id="memory-panel-head">
+      <h3>What PrivateAI remembers</h3>
+      <button id="memory-close-btn" onclick="closeMemoryPanel()">&times;</button>
+    </div>
+    <p id="memory-panel-desc">Only facts you've explicitly approved are stored here. Delete anything at any time.</p>
+    <div id="memory-list"></div>
   </div>
+</div>
 
-  <div id="content-area">
-
-    <!-- CHAT -->
-    <div class="panel active" id="panel-chat">
-      <div id="chat-messages"></div>
-      <div id="chat-input-row">
-        <button id="mic-btn" title="Voice Input" onclick="toggleMic()">🎤</button>
-        <textarea id="chat-input" placeholder="Ask anything... (Shift+Enter for newline)" onkeydown="handleKey(event)" rows="1"></textarea>
-        <button class="send-btn" onclick="sendChat()">Send ➤</button>
+<div id="chat-scroll">
+  <div id="chat-inner">
+    <div id="empty-state">
+      <div class="mark-lg"><svg viewBox="0 0 24 24" fill="none" stroke="#FFF6EC" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.6" fill="#FFF6EC"/></svg></div>
+      <h2>Ask anything</h2>
+      <p>Everything runs on this machine. I can search your indexed documents, build charts and spreadsheets, draw flowcharts, generate images, or transcribe audio — just ask.</p>
+      <div id="suggestions">
+        <button class="suggestion-chip" onclick="quickSend('Summarize what you know from my uploaded documents')">Summarize my documents</button>
+        <button class="suggestion-chip" onclick="quickSend('Make a bar chart of monthly revenue: Jan 12000, Feb 15500, Mar 14200, Apr 18900')">Build a quick chart</button>
+        <button class="suggestion-chip" onclick="quickSend('Draw a flowchart for a typical CI/CD pipeline')">Draw a flowchart</button>
       </div>
     </div>
+  </div>
+</div>
 
-    <!-- FILE UPLOAD -->
-    <div class="panel" id="panel-upload">
-      <div class="panel-card">
-        <h3>📂 File Upload & RAG Ingest</h3>
-        <p style="font-size:13px;color:#8b949e">Upload PDF, DOCX, TXT, XLSX, CSV — they'll be indexed for RAG chat</p>
-        <div class="drop-zone" id="upload-drop" onclick="document.getElementById('upload-file').click()" ondragover="dragOver(event,'upload-drop')" ondragleave="dragLeave('upload-drop')" ondrop="dropFile(event,'upload-handler')">
-          📎 Click or drag & drop files here<br/><small style="color:#8b949e">PDF · DOCX · TXT · XLSX · CSV</small>
-        </div>
-        <input type="file" id="upload-file" style="display:none" accept=".pdf,.docx,.txt,.md,.xlsx,.csv" onchange="uploadFile(this)"/>
-        <div class="result-box" id="upload-result" style="display:none"></div>
-      </div>
+<div id="composer-wrap">
+  <div>
+    <div id="composer">
+      <button id="mic-btn" title="Voice input" onclick="toggleMic()">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+      </button>
+      <textarea id="chat-input" placeholder="Message PrivateAI…" rows="1" onkeydown="handleKey(event)" oninput="autoGrow(this)"></textarea>
+      <button id="send-btn" onclick="sendChat()">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+      </button>
     </div>
-
-    <!-- PDF READER -->
-    <div class="panel" id="panel-pdf">
-      <div class="panel-card">
-        <h3>📄 PDF Reader & AI Summary</h3>
-        <div class="drop-zone" onclick="document.getElementById('pdf-file').click()">📄 Click to upload PDF</div>
-        <input type="file" id="pdf-file" style="display:none" accept=".pdf" onchange="readPDF(this)"/>
-        <div id="pdf-stats" class="stats-grid" style="display:none"></div>
-        <div class="result-box" id="pdf-result" style="display:none"></div>
-        <button class="action-btn green" id="pdf-summarize-btn" style="display:none" onclick="summarizePDF()">🤖 AI Summarize</button>
-      </div>
-    </div>
-
-    <!-- EXCEL READER -->
-    <div class="panel" id="panel-excel-read">
-      <div class="panel-card">
-        <h3>📊 Excel / CSV Reader & Analyser</h3>
-        <div class="drop-zone" onclick="document.getElementById('excel-file').click()">📊 Click to upload Excel or CSV</div>
-        <input type="file" id="excel-file" style="display:none" accept=".xlsx,.xls,.csv" onchange="readExcel(this)"/>
-        <div id="excel-stats" class="stats-grid" style="display:none"></div>
-        <div id="excel-cols" style="display:none;flex-wrap:wrap;gap:4px"></div>
-        <div class="result-box" id="excel-result" style="display:none"></div>
-        <button class="action-btn green" id="excel-ai-btn" style="display:none" onclick="analyzeExcel()">🤖 AI Analyse</button>
-      </div>
-    </div>
-
-    <!-- EXCEL MAKER -->
-    <div class="panel" id="panel-excel-make">
-      <div class="panel-card">
-        <h3>📋 AI Excel Maker</h3>
-        <p style="font-size:13px;color:#8b949e">Describe what spreadsheet you need and AI will generate it</p>
-        <div class="input-row">
-          <input class="panel-input" id="excel-prompt" placeholder="e.g. Monthly sales data for 5 products with revenue and profit"/>
-          <input class="panel-input" id="excel-filename" placeholder="filename.xlsx" style="max-width:160px"/>
-          <button class="action-btn green" onclick="makeExcel()">⚡ Generate</button>
-        </div>
-        <div class="result-box" id="excel-make-result" style="display:none"></div>
-      </div>
-    </div>
-
-    <!-- CHARTS -->
-    <div class="panel" id="panel-charts">
-      <div class="panel-card">
-        <h3>📈 Chart Builder</h3>
-        <div class="input-row" style="flex-wrap:wrap;gap:8px">
-          <select class="panel-input" id="chart-type" style="max-width:140px">
-            <option value="bar">Bar Chart</option>
-            <option value="line">Line Chart</option>
-            <option value="pie">Pie Chart</option>
-            <option value="scatter">Scatter Plot</option>
-            <option value="area">Area Chart</option>
-            <option value="histogram">Histogram</option>
-          </select>
-          <input class="panel-input" id="chart-title" placeholder="Chart title"/>
-          <button class="action-btn purple" onclick="chartFromAI()">🤖 AI Generate Data</button>
-          <button class="action-btn green" onclick="buildChart()">📈 Build Chart</button>
-        </div>
-        <div style="display:flex;gap:8px;flex-direction:column">
-          <input class="panel-input" id="chart-labels" placeholder="Labels (comma-separated): Jan, Feb, Mar"/>
-          <input class="panel-input" id="chart-values" placeholder="Values (comma-separated): 10, 25, 15"/>
-          <input class="panel-input" id="chart-ai-prompt" placeholder="Or describe data for AI: monthly website visitors for 2024"/>
-        </div>
-        <div id="chart-canvas-container" style="display:none"><canvas id="myChart"></canvas></div>
-        <div id="chart-result"></div>
-      </div>
-    </div>
-
-    <!-- FLOWCHART -->
-    <div class="panel" id="panel-flowchart">
-      <div class="panel-card">
-        <h3>🔀 AI Flowchart Generator</h3>
-        <div class="input-row">
-          <input class="panel-input" id="flow-prompt" placeholder="Describe the process: e.g. user login flow, order processing, CI/CD pipeline"/>
-          <button class="action-btn green" onclick="makeFlowchart()">⚡ Generate</button>
-        </div>
-        <div id="flow-steps" style="display:none;flex-wrap:wrap;gap:4px"></div>
-        <div id="flow-result"></div>
-      </div>
-    </div>
-
-    <!-- IMAGE GENERATOR -->
-    <div class="panel" id="panel-image">
-      <div class="panel-card">
-        <h3>🎨 AI Image Generator</h3>
-        <p style="font-size:13px;color:#8b949e">Describe an image — AI picks a color palette and generates abstract art</p>
-        <div class="input-row">
-          <input class="panel-input" id="img-prompt" placeholder="e.g. a futuristic city at sunset, ocean waves, forest at night"/>
-          <select class="panel-input" id="img-style" style="max-width:140px">
-            <option value="abstract">Abstract</option>
-            <option value="geometric">Geometric</option>
-            <option value="minimal">Minimal</option>
-          </select>
-          <button class="action-btn green" onclick="generateImage()">🎨 Generate</button>
-        </div>
-        <div id="img-result"></div>
-      </div>
-    </div>
-
+    <div id="composer-hint">Runs entirely on-premise — nothing leaves this machine</div>
   </div>
 </div>
 
@@ -214,14 +306,10 @@ const API = '';
 let chatHistory = [];
 let mediaRecorder = null;
 let isRecording = false;
-let pdfText = '';
-let excelData = null;
-let chartInstance = null;
 
-// ── INIT ──────────────────────────────────────────────────────────────────────
 window.onload = async () => {
   await loadModels();
-  await loadRagInfo();
+  await loadVaultInfo();
 };
 
 async function loadModels() {
@@ -238,43 +326,194 @@ async function loadModels() {
   } catch(e) {}
 }
 
-async function loadRagInfo() {
+async function loadVaultInfo() {
   try {
     const r = await fetch(`${API}/api/rag/info`);
     const d = await r.json();
-    document.getElementById('rag-info').textContent = `📚 RAG: ${d.documents || 0} docs`;
+    const n = d.documents || 0;
+    document.getElementById('vault-info').textContent = `${n} document${n === 1 ? '' : 's'} indexed`;
   } catch(e) {}
 }
 
-async function clearRag() {
-  if (!confirm('Clear all RAG documents?')) return;
-  await fetch(`${API}/api/rag/clear`, {method:'DELETE'});
-  await loadRagInfo();
+async function openMemoryPanel() {
+  document.getElementById('memory-overlay').classList.add('open');
+  await loadMemoryList();
 }
 
-function switchPanel(name) {
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.side-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById(`panel-${name}`).classList.add('active');
-  document.getElementById(`btn-${name}`)?.classList.add('active');
+function closeMemoryPanel(e) {
+  document.getElementById('memory-overlay').classList.remove('open');
 }
 
-// ── CHAT ──────────────────────────────────────────────────────────────────────
+async function loadMemoryList() {
+  const listEl = document.getElementById('memory-list');
+  listEl.innerHTML = '<div id="memory-empty">Loading…</div>';
+  try {
+    const r = await fetch(`${API}/api/memory/list`);
+    const d = await r.json();
+    const memories = d.memories || [];
+    if (!memories.length) {
+      listEl.innerHTML = '<div id="memory-empty">Nothing remembered yet.</div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    memories.forEach(m => {
+      const row = document.createElement('div');
+      row.className = 'memory-row';
+      const txt = document.createElement('div');
+      txt.className = 'txt';
+      txt.textContent = m.text;
+      const btn = document.createElement('button');
+      btn.textContent = 'Delete';
+      btn.onclick = async () => {
+        btn.disabled = true;
+        try {
+          await fetch(`${API}/api/memory/${m.id}`, { method: 'DELETE' });
+          row.remove();
+          if (!listEl.children.length) {
+            listEl.innerHTML = '<div id="memory-empty">Nothing remembered yet.</div>';
+          }
+        } catch(e) { btn.disabled = false; }
+      };
+      row.appendChild(txt);
+      row.appendChild(btn);
+      listEl.appendChild(row);
+    });
+  } catch(e) {
+    listEl.innerHTML = '<div id="memory-empty">Could not load memories.</div>';
+  }
+}
+
+function newChat() {
+  chatHistory = [];
+  document.getElementById('chat-inner').innerHTML = `
+    <div id="empty-state">
+      <div class="mark-lg"><svg viewBox="0 0 24 24" fill="none" stroke="#FFF6EC" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.6" fill="#FFF6EC"/></svg></div>
+      <h2>Ask anything</h2>
+      <p>Everything runs on this machine. I can search your indexed documents, build charts and spreadsheets, draw flowcharts, generate images, or transcribe audio — just ask.</p>
+      <div id="suggestions">
+        <button class="suggestion-chip" onclick="quickSend('Summarize what you know from my uploaded documents')">Summarize my documents</button>
+        <button class="suggestion-chip" onclick="quickSend('Make a bar chart of monthly revenue: Jan 12000, Feb 15500, Mar 14200, Apr 18900')">Build a quick chart</button>
+        <button class="suggestion-chip" onclick="quickSend('Draw a flowchart for a typical CI/CD pipeline')">Draw a flowchart</button>
+      </div>
+    </div>`;
+}
+
+function quickSend(text) {
+  document.getElementById('chat-input').value = text;
+  sendChat();
+}
+
+function autoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+}
+
 function handleKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
 }
 
-function addMsg(role, content, extra='') {
-  const box = document.getElementById('chat-messages');
-  const div = document.createElement('div');
-  div.className = `msg ${role === 'user' ? 'user' : 'ai'}`;
-  if (typeof content === 'string') {
-    div.innerHTML = content.replace(/```([\s\S]*?)```/g, '<pre>$1</pre>').replace(/\n/g,'<br/>');
+function ensureChatStarted() {
+  const empty = document.getElementById('empty-state');
+  if (empty) empty.remove();
+}
+
+function addUserTurn(text) {
+  ensureChatStarted();
+  const inner = document.getElementById('chat-inner');
+  const turn = document.createElement('div');
+  turn.className = 'turn user';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = text;
+  turn.appendChild(bubble);
+  inner.appendChild(turn);
+  scrollToBottom();
+}
+
+function addAssistantTurn() {
+  const inner = document.getElementById('chat-inner');
+  const turn = document.createElement('div');
+  turn.className = 'turn assistant';
+
+  const trail = document.createElement('div');
+  trail.className = 'status-trail';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+
+  turn.appendChild(trail);
+  turn.appendChild(bubble);
+  inner.appendChild(turn);
+  scrollToBottom();
+  return { turn, trail, bubble };
+}
+
+function scrollToBottom() {
+  const scroll = document.getElementById('chat-scroll');
+  scroll.scrollTop = scroll.scrollHeight;
+}
+
+function renderMarkdownish(text) {
+  return text
+    .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>')
+    .replace(/\n/g, '<br/>');
+}
+
+function renderMemoryProposalCard(bubble, proposalId, memoryText) {
+  const card = document.createElement('div');
+  card.className = 'memory-proposal-card';
+  card.dataset.proposalId = proposalId;
+
+  const label = document.createElement('div');
+  label.className = 'memory-proposal-label';
+  label.textContent = 'Remember this?';
+
+  const text = document.createElement('div');
+  text.className = 'memory-proposal-text';
+  text.textContent = memoryText;
+
+  const actions = document.createElement('div');
+  actions.className = 'memory-proposal-actions';
+
+  const approveBtn = document.createElement('button');
+  approveBtn.className = 'memory-btn approve';
+  approveBtn.textContent = 'Yes, remember';
+  approveBtn.onclick = () => resolveMemoryProposal(proposalId, true, card);
+
+  const rejectBtn = document.createElement('button');
+  rejectBtn.className = 'memory-btn reject';
+  rejectBtn.textContent = 'No';
+  rejectBtn.onclick = () => resolveMemoryProposal(proposalId, false, card);
+
+  actions.appendChild(approveBtn);
+  actions.appendChild(rejectBtn);
+
+  card.appendChild(label);
+  card.appendChild(text);
+  card.appendChild(actions);
+  bubble.appendChild(card);
+}
+
+async function resolveMemoryProposal(proposalId, approved, cardEl) {
+  cardEl.querySelectorAll('button').forEach(b => b.disabled = true);
+  try {
+    const r = await fetch(`${API}/api/memory/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ proposal_id: proposalId, approved })
+    });
+    const d = await r.json();
+    cardEl.classList.add(approved ? 'resolved-yes' : 'resolved-no');
+    const status = document.createElement('div');
+    status.className = 'memory-proposal-status';
+    status.textContent = approved ? 'Saved to memory.' : 'Not saved.';
+    cardEl.appendChild(status);
+  } catch (e) {
+    const status = document.createElement('div');
+    status.className = 'memory-proposal-status';
+    status.textContent = 'Something went wrong saving this.';
+    cardEl.appendChild(status);
   }
-  if (extra) div.innerHTML += extra;
-  box.appendChild(div);
-  box.scrollTop = box.scrollHeight;
-  return div;
 }
 
 async function sendChat() {
@@ -282,31 +521,103 @@ async function sendChat() {
   const text = inp.value.trim();
   if (!text) return;
   inp.value = '';
-  
-  addMsg('user', text);
-  chatHistory.push({role:'user', content:text});
-  
-  const thinking = addMsg('ai', '⏳ Thinking...');
-  
+  inp.style.height = 'auto';
+
+  addUserTurn(text);
+  chatHistory.push({ role: 'user', content: text });
+
   const model = document.getElementById('model-select').value;
-  const useRag = document.getElementById('rag-check').checked;
-  
+  const { trail, bubble } = addAssistantTurn();
+
+  const sendBtn = document.getElementById('send-btn');
+  sendBtn.disabled = true;
+
+  let assistantText = '';
+  let pendingStatusEl = null;
+
   try {
-    const r = await fetch(`${API}/api/chat`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({messages:chatHistory, model, use_rag:useRag})
+    const resp = await fetch(`${API}/api/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: chatHistory, model })
     });
-    const d = await r.json();
-    const reply = d.message?.content || d.error || 'No response';
-    thinking.innerHTML = reply.replace(/```([\s\S]*?)```/g, '<pre>$1</pre>').replace(/\n/g,'<br/>');
-    chatHistory.push({role:'assistant', content:reply});
-  } catch(e) {
-    thinking.textContent = '❌ Error: ' + e.message;
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+
+      const events = buf.split('\n\n');
+      buf = events.pop();
+
+      for (const block of events) {
+        const lines = block.split('\n');
+        let eventType = 'message', data = '{}';
+        for (const line of lines) {
+          if (line.startsWith('event: ')) eventType = line.slice(7).trim();
+          if (line.startsWith('data: ')) data = line.slice(6);
+        }
+        let payload;
+        try { payload = JSON.parse(data); } catch(e) { continue; }
+
+        if (eventType === 'status') {
+          if (pendingStatusEl) pendingStatusEl.classList.add('done');
+          const line = document.createElement('div');
+          line.className = 'status-line';
+          const spin = document.createElement('div');
+          spin.className = 'spin';
+          line.appendChild(spin);
+          line.appendChild(document.createTextNode(payload.label));
+          trail.appendChild(line);
+          pendingStatusEl = line;
+          scrollToBottom();
+        } else if (eventType === 'memory_proposal') {
+          if (pendingStatusEl) { pendingStatusEl.classList.add('done'); pendingStatusEl = null; }
+          renderMemoryProposalCard(bubble, payload.proposal_id, payload.memory_text);
+          scrollToBottom();
+        } else if (eventType === 'media') {
+          if (pendingStatusEl) { pendingStatusEl.classList.add('done'); pendingStatusEl = null; }
+          const img = document.createElement('img');
+          img.src = payload.url + '?t=' + Date.now();
+          bubble.appendChild(img);
+          const link = document.createElement('a');
+          link.className = 'download-card';
+          link.href = payload.url;
+          link.setAttribute('download', '');
+          link.textContent = 'Download';
+          bubble.appendChild(link);
+          scrollToBottom();
+        } else if (eventType === 'token') {
+          if (pendingStatusEl) { pendingStatusEl.classList.add('done'); pendingStatusEl = null; }
+          assistantText += payload.text;
+          const media = Array.from(bubble.querySelectorAll('img, a.download-card, .memory-proposal-card'));
+          bubble.innerHTML = renderMarkdownish(assistantText);
+          media.forEach(m => bubble.appendChild(m));
+          scrollToBottom();
+        } else if (eventType === 'error') {
+          if (pendingStatusEl) pendingStatusEl.classList.add('done');
+          bubble.innerHTML = renderMarkdownish('Error: ' + payload.message);
+        } else if (eventType === 'done') {
+          if (pendingStatusEl) pendingStatusEl.classList.add('done');
+          if (assistantText.trim()) {
+            chatHistory.push({ role: 'assistant', content: assistantText });
+          }
+          await loadVaultInfo();
+        }
+      }
+    }
+  } catch (e) {
+    bubble.innerHTML = renderMarkdownish('Error: ' + e.message);
+  } finally {
+    sendBtn.disabled = false;
   }
 }
 
-// ── MIC ───────────────────────────────────────────────────────────────────────
+// ── MIC ───────────────────────────────────────────────────────────────────
 async function toggleMic() {
   if (isRecording) {
     mediaRecorder?.stop();
@@ -315,20 +626,22 @@ async function toggleMic() {
     return;
   }
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const chunks = [];
-    mediaRecorder = new MediaRecorder(stream, {mimeType:'audio/webm'});
+    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
     mediaRecorder.ondataavailable = e => chunks.push(e.data);
     mediaRecorder.onstop = async () => {
       stream.getTracks().forEach(t => t.stop());
-      const blob = new Blob(chunks, {type:'audio/webm'});
+      const blob = new Blob(chunks, { type: 'audio/webm' });
       const fd = new FormData();
       fd.append('file', blob, 'voice.webm');
       try {
-        const r = await fetch(`${API}/api/voice/transcribe`, {method:'POST', body:fd});
+        const r = await fetch(`${API}/api/voice/transcribe`, { method: 'POST', body: fd });
         const d = await r.json();
         if (d.text) {
-          document.getElementById('chat-input').value = d.text;
+          const inp = document.getElementById('chat-input');
+          inp.value = d.text;
+          autoGrow(inp);
         } else {
           alert('Could not transcribe: ' + (d.error || 'Unknown error'));
         }
@@ -339,252 +652,6 @@ async function toggleMic() {
     document.getElementById('mic-btn').classList.add('recording');
   } catch(e) {
     alert('Mic access denied: ' + e.message);
-  }
-}
-
-// ── FILE UPLOAD ───────────────────────────────────────────────────────────────
-function dragOver(e, id) { e.preventDefault(); document.getElementById(id).classList.add('over'); }
-function dragLeave(id) { document.getElementById(id).classList.remove('over'); }
-
-async function uploadFile(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const res = document.getElementById('upload-result');
-  res.style.display = 'block';
-  res.textContent = '⏳ Uploading & indexing...';
-  const fd = new FormData();
-  fd.append('file', file);
-  try {
-    const r = await fetch(`${API}/api/upload`, {method:'POST', body:fd});
-    const d = await r.json();
-    res.textContent = `✅ ${d.filename}\n📦 ${d.chunks} chunks indexed\n\n📋 Preview:\n${d.preview}`;
-    await loadRagInfo();
-  } catch(e) {
-    res.textContent = '❌ Error: ' + e.message;
-  }
-}
-
-// ── PDF ───────────────────────────────────────────────────────────────────────
-async function readPDF(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const res = document.getElementById('pdf-result');
-  res.style.display = 'block';
-  res.textContent = '⏳ Reading PDF...';
-  const fd = new FormData();
-  fd.append('file', file);
-  try {
-    const r = await fetch(`${API}/api/pdf/read`, {method:'POST', body:fd});
-    const d = await r.json();
-    pdfText = d.text;
-    res.textContent = d.text.substring(0, 3000) + (d.text.length > 3000 ? '\n\n[truncated...]' : '');
-    const stats = document.getElementById('pdf-stats');
-    stats.style.display = 'grid';
-    stats.innerHTML = `<div class="stat-card"><div class="val">${d.pages}</div><div class="lbl">Pages</div></div><div class="stat-card"><div class="val">${d.text.split(' ').length}</div><div class="lbl">Words</div></div>`;
-    document.getElementById('pdf-summarize-btn').style.display = 'block';
-  } catch(e) {
-    res.textContent = '❌ ' + e.message;
-  }
-}
-
-async function summarizePDF() {
-  if (!pdfText) return;
-  const btn = document.getElementById('pdf-summarize-btn');
-  btn.textContent = '⏳ Summarizing...'; btn.disabled = true;
-  const model = document.getElementById('model-select').value;
-  const r = await fetch(`${API}/api/chat`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({model, messages:[{role:'user', content:`Summarize this PDF:\n\n${pdfText.substring(0,4000)}`}]})
-  });
-  const d = await r.json();
-  const res = document.getElementById('pdf-result');
-  res.textContent = '🤖 AI Summary:\n\n' + (d.message?.content || 'No summary');
-  btn.textContent = '🤖 AI Summarize'; btn.disabled = false;
-}
-
-// ── EXCEL READER ──────────────────────────────────────────────────────────────
-async function readExcel(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const res = document.getElementById('excel-result');
-  res.style.display = 'block';
-  res.textContent = '⏳ Reading...';
-  const fd = new FormData();
-  fd.append('file', file);
-  try {
-    const r = await fetch(`${API}/api/excel/read`, {method:'POST', body:fd});
-    const d = await r.json();
-    excelData = d;
-    const stats = document.getElementById('excel-stats');
-    stats.style.display = 'grid';
-    stats.innerHTML = `<div class="stat-card"><div class="val">${d.rows}</div><div class="lbl">Rows</div></div><div class="stat-card"><div class="val">${d.columns.length}</div><div class="lbl">Columns</div></div>`;
-    const cols = document.getElementById('excel-cols');
-    cols.style.display = 'flex';
-    cols.innerHTML = d.columns.map(c => `<span class="tag">${c}</span>`).join('');
-    res.textContent = JSON.stringify(d.preview.slice(0,10), null, 2);
-    document.getElementById('excel-ai-btn').style.display = 'block';
-  } catch(e) {
-    res.textContent = '❌ ' + e.message;
-  }
-}
-
-async function analyzeExcel() {
-  if (!excelData) return;
-  const btn = document.getElementById('excel-ai-btn');
-  btn.textContent = '⏳ Analysing...'; btn.disabled = true;
-  const model = document.getElementById('model-select').value;
-  const r = await fetch(`${API}/api/chat`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({model, messages:[{role:'user', content:`Analyse this Excel data (${excelData.rows} rows, columns: ${excelData.columns.join(', ')}):\n\n${JSON.stringify(excelData.preview.slice(0,20), null, 2)}\n\nGive insights, trends, and recommendations.`}]})
-  });
-  const d = await r.json();
-  document.getElementById('excel-result').textContent = '🤖 AI Analysis:\n\n' + (d.message?.content || 'No analysis');
-  btn.textContent = '🤖 AI Analyse'; btn.disabled = false;
-}
-
-// ── EXCEL MAKER ───────────────────────────────────────────────────────────────
-async function makeExcel() {
-  const prompt = document.getElementById('excel-prompt').value.trim();
-  const filename = document.getElementById('excel-filename').value.trim() || 'output.xlsx';
-  if (!prompt) return;
-  const res = document.getElementById('excel-make-result');
-  res.style.display = 'block';
-  res.textContent = '⏳ Generating Excel with AI...';
-  try {
-    const r = await fetch(`${API}/api/excel/create`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({prompt, filename})
-    });
-    const d = await r.json();
-    res.innerHTML = `✅ Generated ${d.rows} rows × ${d.columns.length} columns\n📥 <a class="download-link" href="${d.download_url}" download>Download ${filename}</a>`;
-  } catch(e) {
-    res.textContent = '❌ ' + e.message;
-  }
-}
-
-// ── CHARTS ────────────────────────────────────────────────────────────────────
-async function chartFromAI() {
-  const prompt = document.getElementById('chart-ai-prompt').value.trim();
-  const chartType = document.getElementById('chart-type').value;
-  if (!prompt) { alert('Enter a description first'); return; }
-  
-  const model = document.getElementById('model-select').value;
-  const r = await fetch(`${API}/api/chat`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({model, messages:[{role:'user', content:`Generate chart data for: "${prompt}". Return ONLY JSON with keys "labels" (array of strings) and "values" (array of numbers). No explanation.`}]})
-  });
-  const d = await r.json();
-  try {
-    const text = d.message?.content || '';
-    const start = text.indexOf('{');
-    const end = text.lastIndexOf('}') + 1;
-    const json = JSON.parse(text.substring(start, end));
-    document.getElementById('chart-labels').value = json.labels.join(', ');
-    document.getElementById('chart-values').value = json.values.join(', ');
-  } catch(e) {
-    alert('Could not parse AI data. Try again.');
-  }
-}
-
-async function buildChart() {
-  const chartType = document.getElementById('chart-type').value;
-  const title = document.getElementById('chart-title').value || 'Chart';
-  const labelsStr = document.getElementById('chart-labels').value;
-  const valuesStr = document.getElementById('chart-values').value;
-  
-  const labels = labelsStr.split(',').map(s => s.trim()).filter(Boolean);
-  const values = valuesStr.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
-  
-  if (!labels.length || !values.length) {
-    alert('Enter labels and values, or use AI Generate'); return;
-  }
-
-  const container = document.getElementById('chart-canvas-container');
-  container.style.display = 'block';
-
-  if (chartInstance) { chartInstance.destroy(); }
-
-  const colors = ['#6c8ebf','#82b366','#d6ae4f','#ae4132','#9e6bbf','#4fb3bf','#bf8c6c'];
-  const ctx = document.getElementById('myChart').getContext('2d');
-  
-  const typeMap = { bar:'bar', line:'line', pie:'pie', scatter:'scatter', area:'line', histogram:'bar' };
-  const cjsType = typeMap[chartType] || 'bar';
-  
-  const dataset = {
-    label: title,
-    data: chartType === 'scatter' ? labels.map((l,i) => ({x:parseFloat(l)||i, y:values[i]})) : values,
-    backgroundColor: chartType === 'pie' ? colors : colors[0] + 'cc',
-    borderColor: chartType === 'pie' ? colors : colors[0],
-    borderWidth: 2,
-    fill: chartType === 'area',
-    tension: 0.4,
-    pointRadius: 5
-  };
-
-  chartInstance = new Chart(ctx, {
-    type: cjsType,
-    data: { labels: chartType === 'scatter' ? undefined : labels, datasets: [dataset] },
-    options: {
-      responsive: true,
-      plugins: { legend: { labels: { color: '#e6edf3' } }, title: { display:true, text:title, color:'#58a6ff', font:{size:14} } },
-      scales: cjsType === 'pie' ? {} : {
-        x: { ticks:{color:'#8b949e'}, grid:{color:'#21262d'} },
-        y: { ticks:{color:'#8b949e'}, grid:{color:'#21262d'} }
-      }
-    }
-  });
-
-  // Also save server-side
-  const res = document.getElementById('chart-result');
-  try {
-    const r = await fetch(`${API}/api/chart/create`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({type:chartType, title, data:{labels, values}})
-    });
-    const d = await r.json();
-    res.innerHTML = `<a class="download-link" href="${d.download_url}" download>📥 Download PNG</a>`;
-  } catch(e) {}
-}
-
-// ── FLOWCHART ─────────────────────────────────────────────────────────────────
-async function makeFlowchart() {
-  const prompt = document.getElementById('flow-prompt').value.trim();
-  if (!prompt) return;
-  const res = document.getElementById('flow-result');
-  res.innerHTML = '⏳ Generating flowchart...';
-  try {
-    const r = await fetch(`${API}/api/flowchart/create`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({prompt})
-    });
-    const d = await r.json();
-    const steps = document.getElementById('flow-steps');
-    steps.style.display = 'flex';
-    steps.innerHTML = d.steps.map(s => `<span class="tag">✓ ${s}</span>`).join('');
-    res.innerHTML = `<a class="download-link" href="${d.download_url}" download>📥 Download Flowchart PNG</a><br/><img class="chart-preview" src="${d.download_url}?t=${Date.now()}" alt="flowchart"/>`;
-  } catch(e) {
-    res.textContent = '❌ ' + e.message;
-  }
-}
-
-// ── IMAGE GENERATOR ───────────────────────────────────────────────────────────
-async function generateImage() {
-  const prompt = document.getElementById('img-prompt').value.trim();
-  const style = document.getElementById('img-style').value;
-  if (!prompt) return;
-  const res = document.getElementById('img-result');
-  res.innerHTML = '⏳ Generating image with AI palette...';
-  try {
-    const r = await fetch(`${API}/api/image/generate`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({prompt, style})
-    });
-    const d = await r.json();
-    res.innerHTML = `<a class="download-link" href="${d.download_url}" download>📥 Download Image</a><br/><img class="chart-preview" src="${d.download_url}?t=${Date.now()}" alt="${prompt}" style="max-height:500px"/>`;
-  } catch(e) {
-    res.textContent = '❌ ' + e.message;
   }
 }
 </script>
