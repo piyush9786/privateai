@@ -14,6 +14,7 @@ import {
 import {
   Send,
   Mic,
+  Square,
   MessageSquare,
   Bot,
   User,
@@ -55,8 +56,13 @@ export default function ChatPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [statusTrail, setStatusTrail] = useState<StatusEvent[]>([]);
   const [memoryProposal, setMemoryProposal] = useState<MemoryProposal | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
     loadModels();
@@ -264,6 +270,61 @@ export default function ChatPage() {
     }
   }
 
+  async function toggleMic() {
+    if (isRecording) {
+      mediaRecorderRef.current?.stop();
+      setIsRecording(false);
+      return;
+    }
+
+    setMicError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        await transcribeAudio(blob);
+      };
+
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setIsRecording(true);
+    } catch (e: any) {
+      setMicError(
+        e?.name === "NotAllowedError"
+          ? "Microphone access was denied."
+          : e?.message ?? "Could not access the microphone."
+      );
+    }
+  }
+
+  async function transcribeAudio(blob: Blob) {
+    setIsTranscribing(true);
+    setMicError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", blob, "voice.webm");
+      const r = await fetch("/api/voice/transcribe", { method: "POST", body: fd });
+      const d = await r.json();
+      if (d.status === "ok" && d.text) {
+        setInput((prev) => (prev ? `${prev} ${d.text}` : d.text));
+      } else {
+        setMicError(d.error || "Could not transcribe that recording.");
+      }
+    } catch (e: any) {
+      setMicError(e?.message ?? "Transcription failed.");
+    } finally {
+      setIsTranscribing(false);
+    }
+  }
+
   return (
     <div className="h-[calc(100vh-180px)] flex gap-6">
       {/* Chat History Sidebar */}
@@ -432,7 +493,7 @@ export default function ChatPage() {
             <div className="max-w-4xl mx-auto">
               <div className="flex gap-2">
                 <Input
-                  placeholder="Ask a question about your documents..."
+                  placeholder={isRecording ? "Listening…" : "Ask a question about your documents..."}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
@@ -442,11 +503,22 @@ export default function ChatPage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="text-gray-400 hover:text-white flex-shrink-0"
-                  disabled
-                  title="Voice input coming in a later step"
+                  onClick={toggleMic}
+                  disabled={isStreaming || isTranscribing}
+                  className={`flex-shrink-0 ${
+                    isRecording
+                      ? "text-red-400 hover:text-red-300 animate-pulse"
+                      : "text-gray-400 hover:text-white"
+                  }`}
+                  title={isRecording ? "Stop recording" : "Voice input"}
                 >
-                  <Mic className="w-5 h-5" />
+                  {isTranscribing ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : isRecording ? (
+                    <Square className="w-5 h-5" />
+                  ) : (
+                    <Mic className="w-5 h-5" />
+                  )}
                 </Button>
                 <Button
                   onClick={sendMessage}
@@ -460,9 +532,13 @@ export default function ChatPage() {
                   )}
                 </Button>
               </div>
-              <p className="text-xs text-gray-500 mt-2">
-                Running entirely on-premise — nothing leaves this machine
-              </p>
+              {micError ? (
+                <p className="text-xs text-red-400 mt-2">{micError}</p>
+              ) : (
+                <p className="text-xs text-gray-500 mt-2">
+                  Running entirely on-premise — nothing leaves this machine
+                </p>
+              )}
             </div>
           </div>
         </Card>
