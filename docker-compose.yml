@@ -11,10 +11,17 @@ services:
       - ollama_data:/root/.ollama
     environment:
       - OLLAMA_HOST=0.0.0.0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     networks:
       - privateai_net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      test: ["CMD", "ollama", "list"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -52,6 +59,7 @@ services:
       - ./backend:/app
       - upload_data:/app/uploads
       - export_data:/app/exports
+      - app_data:/app/data
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
       - CHROMADB_HOST=chromadb
@@ -96,8 +104,6 @@ services:
       curl -s -X POST http://ollama:11434/api/pull -d '{\"name\":\"${DEFAULT_MODEL:-llama3.2}\"}' &&
       echo 'Pulling embed model...' &&
       curl -s -X POST http://ollama:11434/api/pull -d '{\"name\":\"${EMBED_MODEL:-nomic-embed-text}\"}' &&
-      echo 'Pulling Qwen3 8B...' &&
-      curl -s -X POST http://ollama:11434/api/pull -d '{\"name\":\"qwen3:8b\"}' &&
       echo 'Models ready!'
       "
     depends_on:
@@ -110,6 +116,7 @@ volumes:
   chroma_data:
   upload_data:
   export_data:
+  app_data:
 
 networks:
   privateai_net:
