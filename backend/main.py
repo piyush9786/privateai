@@ -118,6 +118,53 @@ async def list_models():
         r = await c.get(f"{OLLAMA_URL}/api/tags")
         return r.json()
 
+@app.get("/api/system/status")
+async def system_status():
+    """Real, derived status for the dashboard — no fabricated metrics.
+
+    Surfaces what's actually knowable: which models are currently loaded
+    into Ollama and how much of each sits in VRAM vs falls back to CPU
+    (the same signal `ollama ps` reports), plus simple up/down checks for
+    the other services. No GPU/CPU percentage is invented when Ollama
+    doesn't provide one.
+    """
+    result = {
+        "ollama": {"reachable": False, "running_models": []},
+        "chromadb": {"reachable": False},
+        "backend": {"reachable": True},
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=5) as c:
+            r = await c.get(f"{OLLAMA_URL}/api/ps")
+            r.raise_for_status()
+            data = r.json()
+            result["ollama"]["reachable"] = True
+            running = []
+            for m in data.get("models", []):
+                size = m.get("size", 0)
+                size_vram = m.get("size_vram", 0)
+                vram_fraction = round((size_vram / size) * 100) if size else None
+                running.append({
+                    "name": m.get("name"),
+                    "size_bytes": size,
+                    "size_vram_bytes": size_vram,
+                    "vram_percent": vram_fraction,
+                    "expires_at": m.get("expires_at"),
+                })
+            result["ollama"]["running_models"] = running
+    except Exception:
+        pass
+
+    try:
+        async with httpx.AsyncClient(timeout=5) as c:
+            r = await c.get(f"http://{CHROMA_HOST}:{CHROMA_PORT}/api/v1/heartbeat")
+            result["chromadb"]["reachable"] = r.status_code == 200
+    except Exception:
+        pass
+
+    return result
+
 # ── CHAT ─────────────────────────────────────────────────────────────────────
 @app.post("/api/chat")
 async def chat(request: dict):
@@ -993,13 +1040,31 @@ async def generate_image(request: dict):
 @app.post("/api/voice/transcribe")
 async def voice_transcribe(file: UploadFile = File(...)):
     import speech_recognition as sr
+    from pydub import AudioSegment
+    import io
+
     suffix = Path(file.filename).suffix.lower()
+    content = await file.read()
     tmp = UPLOAD_DIR / f"{uuid.uuid4()}{suffix}"
-    tmp.write_bytes(await file.read())
-    
+    tmp.write_bytes(content)
+
     r = sr.Recognizer()
     try:
-        with sr.AudioFile(str(tmp)) as source:
+        # speech_recognition's AudioFile only reads WAV/AIFF/FLAC. Browsers
+        # record via MediaRecorder as WebM/Opus (or sometimes ogg), so we
+        # transcode through pydub/ffmpeg first rather than handing it raw
+        # container/codec bytes that AudioFile can't parse.
+        if suffix in (".wav", ".aiff", ".aif", ".flac"):
+            audio_source = str(tmp)
+        else:
+            fmt = suffix.lstrip(".") or "webm"
+            sound = AudioSegment.from_file(str(tmp), format=fmt)
+            wav_io = io.BytesIO()
+            sound.export(wav_io, format="wav")
+            wav_io.seek(0)
+            audio_source = wav_io
+
+        with sr.AudioFile(audio_source) as source:
             audio = r.record(source)
         text = r.recognize_google(audio)
         return {"status": "ok", "text": text}
