@@ -1,4 +1,4 @@
-import os, io, json, uuid, base64, tempfile
+import os, io, json, uuid, base64, tempfile, sqlite3
 from pathlib import Path
 from typing import Optional
 
@@ -41,6 +41,51 @@ UPLOAD_DIR = Path("/app/uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 EXPORT_DIR = Path("/app/exports")
 EXPORT_DIR.mkdir(exist_ok=True)
+DATA_DIR = Path("/app/data")
+DATA_DIR.mkdir(exist_ok=True)
+DB_PATH = DATA_DIR / "conversations.db"
+
+def get_db():
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    conn = get_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS conversations (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL DEFAULT 'New chat',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id TEXT PRIMARY KEY,
+            conversation_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (conversation_id) REFERENCES conversations(id)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS documents (
+            id TEXT PRIMARY KEY,
+            filename TEXT NOT NULL,
+            file_type TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL,
+            chunk_count INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'indexed',
+            error_message TEXT,
+            uploaded_at TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+init_db()
 
 app.mount("/exports", StaticFiles(directory=str(EXPORT_DIR)), name="exports")
 
@@ -435,11 +480,126 @@ async def execute_tool(name: str, args: dict):
         return await tool_recall_memories(args.get("query", "")), None
     return f"Unknown tool: {name}", None
 
+# ── CONVERSATION PERSISTENCE ───────────────────────────────────────────────────
+import datetime
+
+def now_iso():
+    return datetime.datetime.utcnow().isoformat()
+
+def db_create_conversation(title: str = "New chat") -> str:
+    conv_id = str(uuid.uuid4())
+    conn = get_db()
+    ts = now_iso()
+    conn.execute("INSERT INTO conversations (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)", (conv_id, title, ts, ts))
+    conn.commit()
+    conn.close()
+    return conv_id
+
+def db_save_message(conversation_id: str, role: str, content: str):
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)",
+        (str(uuid.uuid4()), conversation_id, role, content, now_iso())
+    )
+    conn.execute("UPDATE conversations SET updated_at = ? WHERE id = ?", (now_iso(), conversation_id))
+    conn.commit()
+    conn.close()
+
+def db_maybe_set_title(conversation_id: str, first_user_message: str):
+    conn = get_db()
+    row = conn.execute("SELECT title FROM conversations WHERE id = ?", (conversation_id,)).fetchone()
+    if row and row["title"] == "New chat":
+        title = first_user_message.strip().replace("\n", " ")[:60]
+        if title:
+            conn.execute("UPDATE conversations SET title = ? WHERE id = ?", (title, conversation_id))
+            conn.commit()
+    conn.close()
+
+def db_save_document(filename: str, file_type: str, size_bytes: int, chunk_count: int, status: str, error_message: str = None) -> str:
+    doc_id = str(uuid.uuid4())
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO documents (id, filename, file_type, size_bytes, chunk_count, status, error_message, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (doc_id, filename, file_type, size_bytes, chunk_count, status, error_message, now_iso())
+    )
+    conn.commit()
+    conn.close()
+    return doc_id
+
+def db_list_documents():
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM documents ORDER BY uploaded_at DESC").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def db_get_document(document_id: str):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM documents WHERE id = ?", (document_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def db_delete_document_row(document_id: str):
+    conn = get_db()
+    conn.execute("DELETE FROM documents WHERE id = ?", (document_id,))
+    conn.commit()
+    conn.close()
+
+@app.post("/api/conversations")
+async def create_conversation():
+    conv_id = db_create_conversation()
+    return {"id": conv_id, "title": "New chat"}
+
+@app.get("/api/conversations")
+async def list_conversations():
+    conn = get_db()
+    rows = conn.execute("SELECT id, title, created_at, updated_at FROM conversations ORDER BY updated_at DESC LIMIT 100").fetchall()
+    conn.close()
+    return {"conversations": [dict(r) for r in rows]}
+
+@app.get("/api/conversations/{conversation_id}")
+async def get_conversation(conversation_id: str):
+    conn = get_db()
+    conv = conn.execute("SELECT id, title, created_at, updated_at FROM conversations WHERE id = ?", (conversation_id,)).fetchone()
+    if not conv:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    msgs = conn.execute("SELECT role, content, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at ASC", (conversation_id,)).fetchall()
+    conn.close()
+    return {"id": conv["id"], "title": conv["title"], "messages": [dict(m) for m in msgs]}
+
+@app.delete("/api/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: str):
+    conn = get_db()
+    conn.execute("DELETE FROM messages WHERE conversation_id = ?", (conversation_id,))
+    conn.execute("DELETE FROM conversations WHERE id = ?", (conversation_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "deleted", "id": conversation_id}
+AGENT_SYSTEM_PROMPT = (
+    "You are PrivateAI, a fully local AI assistant. You have tools available "
+    "for searching the user's uploaded documents, recalling saved memories, "
+    "building charts and spreadsheets, drawing flowcharts, generating images, "
+    "and transcribing audio.\n\n"
+    "IMPORTANT: If the user asks anything about their uploaded files, documents, "
+    "or previously shared content — including vague questions like 'what is this "
+    "file about' or 'summarize my document' — you MUST call search_documents "
+    "first before answering. Never guess the contents of a file from its name "
+    "alone. If search_documents returns nothing relevant, say so plainly instead "
+    "of speculating."
+)
+
 # ── AGENT CHAT (STREAMING, TOOL-CALLING) ──────────────────────────────────────
 @app.post("/api/chat/stream")
 async def chat_stream(request: dict):
     messages = list(request.get("messages", []))
+    if not messages or messages[0].get("role") != "system":
+        messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}] + messages
     model = request.get("model", DEFAULT_MODEL)
+    conversation_id = request.get("conversation_id")
+
+    if conversation_id and messages and messages[-1].get("role") == "user":
+        db_save_message(conversation_id, "user", messages[-1].get("content", ""))
+        db_maybe_set_title(conversation_id, messages[-1].get("content", ""))
 
     async def event_gen():
         def sse(event: str, data: dict):
@@ -462,6 +622,8 @@ async def chat_stream(request: dict):
             if not tool_calls:
                 content = msg.get("content", "") or result.get("error", "No response")
                 yield sse("token", {"text": content})
+                if conversation_id and content.strip():
+                    db_save_message(conversation_id, "assistant", content)
                 yield sse("done", {})
                 return
 
@@ -546,6 +708,7 @@ async def upload_file(file: UploadFile = File(...)):
     
     content = await file.read()
     tmp_path.write_bytes(content)
+    size_bytes = len(content)
     
     text = ""
     try:
@@ -566,6 +729,7 @@ async def upload_file(file: UploadFile = File(...)):
                 df = pd.read_excel(tmp_path)
             text = df.to_string()
         else:
+            db_save_document(file.filename, suffix, size_bytes, 0, "unsupported", f"File type {suffix} not supported for RAG")
             return {"status": "unsupported", "message": f"File type {suffix} not supported for RAG"}
         
         chunks = []
@@ -579,9 +743,30 @@ async def upload_file(file: UploadFile = File(...)):
                 metadatas = [{"source": file.filename, "chunk": i} for i in range(len(chunks))]
                 col.add(documents=chunks, embeddings=embeddings_list, ids=ids, metadatas=metadatas)
         
-        return {"status": "ok", "filename": file.filename, "chunks": len(chunks), "preview": text[:500]}
+        doc_id = db_save_document(file.filename, suffix, size_bytes, len(chunks), "indexed" if chunks else "empty")
+        return {"status": "ok", "filename": file.filename, "chunks": len(chunks), "preview": text[:500], "document_id": doc_id}
     except Exception as e:
+        db_save_document(file.filename, suffix, size_bytes, 0, "failed", str(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/documents")
+async def list_documents():
+    return {"documents": db_list_documents()}
+
+@app.delete("/api/documents/{document_id}")
+async def delete_document(document_id: str):
+    doc = db_get_document(document_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    try:
+        col = get_collection()
+        col.delete(where={"source": doc["filename"]})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to remove indexed chunks: {e}")
+    db_delete_document_row(document_id)
+    return {"status": "deleted", "document_id": document_id}
+
+
 
 # ── PDF READ & SUMMARISE ──────────────────────────────────────────────────────
 @app.post("/api/pdf/read")

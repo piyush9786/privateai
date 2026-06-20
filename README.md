@@ -1,18 +1,19 @@
-# 🔒 PrivateAI — On-Premise RAG Intelligence
+# 🔒 PrivateAI — On-Premise Agentic AI Platform
 
-A fully local, private AI platform featuring Retrieval-Augmented Generation (RAG), built on Ollama, ChromaDB, FastAPI, and a Vanilla JS frontend. Every model, embedding, and document stays on your own machine — nothing is sent to a third-party API.
+A fully local, private AI platform with an agentic chat interface, persistent memory, document retrieval (RAG), and a real enterprise-style dashboard. Built on Ollama, ChromaDB, FastAPI, and React. Every model, embedding, document, and memory stays on your own machine — nothing is sent to a third-party API.
 
 ---
 
 ## ✨ Features
 
-- 💬 **Local LLM Chat** — powered by Ollama. Ships with Llama 3.2 by default, with Qwen 3 8B available as an additional model.
-- 📂 **Document RAG** — upload PDFs, DOCX, TXT, Markdown, CSV, or Excel files and chat with their contents.
-- 🧠 **Vector Search** — ChromaDB stores embeddings for semantic retrieval over your uploaded documents.
-- 📊 **Data & Visualization Tools** — read/create Excel files, generate charts, flowcharts, and simple AI-guided images, all from the chat interface.
-- 🎙️ **Voice Transcription** — convert recorded audio to text.
-- 💾 **Exports** — generated files (charts, spreadsheets, images) are saved and downloadable via the app.
-- 🔒 **100% Private** — all inference, embedding, and storage happens inside your own Docker network. No data leaves your machine.
+- 💬 **Agentic Chat** — the model doesn't just answer; it decides when to call tools (search documents, build a chart, generate a spreadsheet, draw a flowchart, generate an image, transcribe audio) mid-conversation, and the UI shows a live status trail while each one runs.
+- 🧠 **Opt-in Persistent Memory** — the agent can propose remembering a fact about you (preferences, ongoing projects, etc.), but **nothing is saved without your explicit approval**. Stored memories are visible and deletable at any time.
+- 📂 **Document RAG** — upload PDFs, DOCX, TXT, Markdown, CSV, or Excel files; they're chunked, embedded, and become searchable in chat. A real document table tracks every upload (filename, size, status, chunk count) with one-click delete that also removes the matching vectors from the store.
+- 💾 **Persistent Conversations** — every chat is saved to disk (SQLite) and survives container restarts. Full history is browsable and resumable.
+- 📊 **Generative Tools** — chart building, spreadsheet generation, flowchart drawing, simple AI-guided images, and voice transcription, all invoked automatically by the agent when relevant.
+- 🖥️ **Enterprise Dashboard UI** — a multi-page React app (Dashboard, Chat, Documents, Models, Agents, Knowledge Bases, Analytics, Users, Security, Deployment). Chat and Documents are fully wired to the real backend; the remaining pages are visual scaffolding pending further wiring.
+- ⚡ **GPU Acceleration** — Ollama runs on your NVIDIA GPU when available, configured via Docker Compose device reservations.
+- 🔒 **100% Private** — all inference, embedding, and storage happens inside your own Docker network. No data leaves your machine, ever.
 
 ---
 
@@ -20,14 +21,15 @@ A fully local, private AI platform featuring Retrieval-Augmented Generation (RAG
 
 | Layer | Technology |
 |---|---|
-| Backend | Python 3.11, FastAPI, LangChain, ChromaDB client |
-| Frontend | Vanilla HTML / CSS / JS |
-| LLM runtime | Ollama |
+| Backend | Python 3.11, FastAPI, LangChain, ChromaDB client, SQLite |
+| Frontend | React + Vite + TypeScript, Tailwind CSS, shadcn/ui, React Router |
+| LLM runtime | Ollama (GPU-accelerated via NVIDIA Container Toolkit) |
 | Default chat model | `llama3.2` |
 | Additional chat model | `qwen3:8b` |
 | Embedding model | `nomic-embed-text` |
 | Vector database | ChromaDB |
-| Reverse proxy | Nginx |
+| Conversation & document metadata store | SQLite (`conversations`, `messages`, `documents` tables) |
+| Reverse proxy / static hosting | Nginx |
 | Orchestration | Docker Compose |
 
 ---
@@ -37,22 +39,25 @@ A fully local, private AI platform featuring Retrieval-Augmented Generation (RAG
 ```
 ┌─────────────┐      ┌──────────────┐      ┌─────────────┐
 │   Browser   │─────▶│    Nginx     │─────▶│   Backend   │
-│ (frontend)  │ :3001│ (reverse     │ :8000│  (FastAPI)  │
-└─────────────┘      │  proxy)      │      └──────┬──────┘
+│ (React SPA) │ :3001│ (built React │ :8000│  (FastAPI)  │
+└─────────────┘      │  app + proxy)│      └──────┬──────┘
                       └──────────────┘             │
                                           ┌─────────┴─────────┐
                                           ▼                   ▼
                                    ┌─────────────┐     ┌─────────────┐
                                    │   Ollama    │     │  ChromaDB   │
-                                   │(LLM + embed)│     │  (vectors)  │
+                                   │ (LLM + embed,│    │ (documents +│
+                                   │  GPU-accel.) │     │  memories)  │
                                    └─────────────┘     └─────────────┘
 ```
 
-All five services run as separate containers on a shared Docker bridge network (`privateai_net`) and talk to each other by container name (`ollama`, `chromadb`, `backend`).
+The backend also writes to a local SQLite database (`/app/data/conversations.db`, on the `app_data` volume) for conversation history and document metadata — separate from ChromaDB, which only holds vector embeddings.
+
+All services run as separate containers on a shared Docker bridge network (`privateai_net`) and talk to each other by container name (`ollama`, `chromadb`, `backend`).
 
 | Service | Container name | Internal port | Host port |
 |---|---|---|---|
-| Nginx | `privateai_nginx` | 80 | **3001** |
+| Nginx (serves built React app, proxies `/api`) | `privateai_nginx` | 80 | **3001** |
 | Backend (FastAPI) | `privateai_backend` | 8000 | 8002 |
 | Ollama | `privateai_ollama` | 11434 | 11435 |
 | ChromaDB | `privateai_chromadb` | 8000 | 8003 |
@@ -63,24 +68,17 @@ All five services run as separate containers on a shared Docker bridge network (
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Docker and Docker Compose v2 (`docker compose`, not the legacy `docker-compose`)
-- ~8 GB free disk space for models (more if you add larger ones)
-- 8 GB+ RAM recommended; a GPU is optional but significantly speeds up generation
+- Docker Engine (not Docker Desktop, if you want GPU acceleration on Linux — see [GPU Setup](#-gpu-setup-nvidia) below)
+- ~8 GB free disk space for models
+- 8 GB+ RAM recommended
 
 ### Setup
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/piyush9786/privateai.git
 cd privateai
-
-# 2. Set up environment variables
 cp .env.example .env
-
-# 3. Launch the full stack
 docker compose up -d
-
-# 4. Watch the first-run model download (a few GB, only happens once)
 docker compose logs -f model-init
 ```
 
@@ -90,90 +88,131 @@ Once `model-init` logs `Models ready!` and exits, open:
 http://localhost:3001
 ```
 
+You'll land directly on the dashboard (no login — authentication isn't implemented yet).
+
 ### Stopping / restarting
 
 ```bash
-docker compose down          # stop everything, keep data (models, vectors, uploads)
+docker compose down          # stop everything, keep data
 docker compose down -v       # stop everything AND wipe all volumes (full reset)
-docker compose up -d         # start again
-docker compose restart backend   # restart just one service after a code change
+docker compose up -d
+docker compose restart backend   # restart one service after a code change
+docker compose build --no-cache backend   # rebuild after changing requirements.txt or main.py
+docker compose build --no-cache nginx     # rebuild after changing the React frontend
 ```
+
+---
+
+## 🖥️ GPU Setup (NVIDIA)
+
+Ollama is configured in `docker-compose.yml` to request a GPU via:
+
+```yaml
+deploy:
+  resources:
+    reservations:
+      devices:
+        - driver: nvidia
+          count: all
+          capabilities: [gpu]
+```
+
+This requires the **NVIDIA Container Toolkit** on the host and a Docker daemon that actually supports GPU passthrough.
+
+> ⚠️ **Docker Desktop on Linux does not support GPU passthrough** — this is a known platform limitation, not a configuration issue. If you're on Linux, install plain **Docker Engine (CE)** alongside or instead of Docker Desktop. The two can coexist via separate contexts:
+> ```bash
+> docker context ls                  # see available contexts
+> docker context use default         # switch to GPU-capable Docker Engine
+> docker context use desktop-linux   # switch back to Docker Desktop
+> ```
+> Docker Desktop on Windows (via WSL2) and macOS handle GPU passthrough differently and may not have this limitation.
+
+To verify GPU access once the stack is running:
+
+```bash
+docker exec privateai_ollama nvidia-smi
+docker exec privateai_ollama ollama ps   # shows % GPU vs CPU for a loaded model
+```
+
+VRAM is the real constraint for laptop GPUs — a 3–4 GB card comfortably fits `llama3.2` (~2.6 GB) at 100% GPU, while larger models like `qwen3:8b` (~5.2 GB) may partially fall back to CPU rather than fail outright.
 
 ---
 
 ## ⚙️ Configuration
 
-All configuration is via environment variables, set in `.env` (copied from `.env.example`):
+Set via `.env` (copied from `.env.example`):
 
 | Variable | Default | Description |
 |---|---|---|
 | `DEFAULT_MODEL` | `llama3.2` | Chat model used when none is specified |
-| `EMBED_MODEL` | `nomic-embed-text` | Embedding model used for RAG |
-| `APP_SECRET` | `changeme-in-production-please` | App secret placeholder — change before any non-local deployment |
-| `CHUNK_SIZE` | `1000` | Character chunk size for document splitting before embedding |
+| `EMBED_MODEL` | `nomic-embed-text` | Embedding model used for RAG and memory |
+| `APP_SECRET` | `changeme-in-production-please` | Placeholder — change before any non-local deployment |
+| `CHUNK_SIZE` | `1000` | Character chunk size for document splitting |
 | `CHUNK_OVERLAP` | `200` | Overlap between consecutive chunks |
 
 ---
 
-## 🤖 Available Models
+## 🤖 How the Agent Works
 
-The stack pulls these models automatically on first startup via the `model-init` service:
+Every chat request goes through `/api/chat/stream`, which runs an agent loop against Ollama's tool-calling API:
 
-| Model | Tag | Size | Purpose |
-|---|---|---|---|
-| Llama 3.2 | `llama3.2` | ~2 GB | Default chat model |
-| Nomic Embed Text | `nomic-embed-text` | ~270 MB | Embeddings for RAG |
-| Qwen 3 8B | `qwen3:8b` | ~5.2 GB | Additional chat model, stronger reasoning |
+1. The model receives the conversation plus a system prompt instructing it to use tools proactively (e.g. always search the vault before answering questions about uploaded files, rather than guessing from a filename).
+2. If the model requests a tool call, the backend executes it, streams a `status` event (e.g. *"Searching the vault…"*) so the UI can show live progress, and feeds the result back to the model.
+3. This repeats (capped at 6 rounds) until the model returns a plain-text answer, which streams to the UI token by token.
 
-### Adding or pulling models manually
+### Available tools
+- `search_documents` — semantic search over your uploaded documents
+- `recall_memories` — semantic search over previously confirmed memories
+- `propose_memory` — proposes saving a fact about you; **pauses the stream and waits for explicit approval** before writing anything
+- `create_chart` / `create_spreadsheet` / `create_flowchart` / `generate_image` — generate and save a file, returned as a download link
+- `read_spreadsheet` / `transcribe_voice_note` — read back previously uploaded files
 
-You can pull any additional Ollama model into the running stack at any time:
-
-```bash
-docker compose exec ollama ollama pull <model-name>
-docker compose exec ollama ollama list
-```
-
-The new model will automatically appear in the model dropdown in the UI (it calls Ollama's `/api/tags` under the hood) — no restart needed.
-
-### Notes on Qwen 3 8B
-
-- It's noticeably slower than `llama3.2` on CPU-only setups (3.2B vs 8B parameters), so expect longer response times without a GPU.
-- Qwen 3 defaults to a "thinking" mode that reasons step-by-step before answering. The backend currently forwards the raw model output, so `<think>...</think>` content (if present) will appear inline in the response.
+### Memory, specifically
+Memory is opt-in by design. When the agent calls `propose_memory`, the backend does **not** write to the memory store — it sends a `memory_proposal` event with the proposed text and pauses. The frontend shows an approve/reject card; only on approval does `POST /api/memory/confirm` actually persist it to a dedicated ChromaDB collection (`privateai_memories`), separate from your document vault. Everything stored is visible and deletable via `GET /api/memory/list` / `DELETE /api/memory/{id}`.
 
 ---
 
 ## 📡 API Reference
 
-The backend exposes a REST API under `/api/`, proxied through Nginx at `http://localhost:3001/api/...` (directly reachable at `http://localhost:8002/api/...` too).
-
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/health` | Health check |
 | `GET` | `/api/models` | List models available in Ollama |
-| `POST` | `/api/chat` | Send a chat message; optional RAG context injection |
-| `POST` | `/api/upload` | Upload a document for RAG ingestion (PDF/DOCX/TXT/MD/XLSX/CSV) |
-| `POST` | `/api/pdf/read` | Extract and return text from a PDF |
-| `POST` | `/api/excel/read` | Read a spreadsheet/CSV and return rows, columns, and stats |
-| `POST` | `/api/excel/create` | Generate an Excel file from supplied data or an AI-generated prompt |
-| `POST` | `/api/chart/create` | Render a bar/line/pie/scatter/area/histogram chart as PNG |
-| `POST` | `/api/flowchart/create` | Generate a step-by-step flowchart from a prompt or step list |
-| `POST` | `/api/image/generate` | Generate an AI-color-guided abstract image |
-| `POST` | `/api/voice/transcribe` | Transcribe an uploaded audio file to text |
-| `GET` | `/api/rag/info` | Get the current count of documents in the vector store |
+| `POST` | `/api/chat` | Single-turn chat, no tool-calling (legacy/simple path) |
+| `POST` | `/api/chat/stream` | Agentic chat with tool-calling, SSE streaming |
+| `POST` | `/api/conversations` | Create a new conversation |
+| `GET` | `/api/conversations` | List saved conversations |
+| `GET` | `/api/conversations/{id}` | Get full message history for one conversation |
+| `DELETE` | `/api/conversations/{id}` | Delete a conversation and its messages |
+| `POST` | `/api/memory/confirm` | Approve or reject a pending memory proposal |
+| `GET` | `/api/memory/list` | List all confirmed memories |
+| `DELETE` | `/api/memory/{id}` | Delete a stored memory |
+| `POST` | `/api/upload` | Upload a document for RAG ingestion |
+| `GET` | `/api/documents` | List all uploaded documents with status/size/chunk count |
+| `DELETE` | `/api/documents/{id}` | Delete a document's metadata row **and** its vectors from ChromaDB |
+| `POST` | `/api/pdf/read` | Extract text from a PDF |
+| `POST` | `/api/excel/read` | Read a spreadsheet/CSV and return rows, columns, stats |
+| `POST` | `/api/excel/create` | Generate an Excel file |
+| `POST` | `/api/chart/create` | Render a chart as PNG |
+| `POST` | `/api/flowchart/create` | Generate a flowchart PNG |
+| `POST` | `/api/image/generate` | Generate an AI-palette-guided abstract image |
+| `POST` | `/api/voice/transcribe` | Transcribe an uploaded audio file |
+| `GET` | `/api/rag/info` | Total indexed chunk count |
 | `DELETE` | `/api/rag/clear` | Clear the entire RAG vector collection |
 
-### Example: chat with RAG enabled
+### Example: agentic chat (SSE)
 
 ```bash
-curl -X POST http://localhost:3001/api/chat \
+curl -N -X POST http://localhost:3001/api/chat/stream \
   -H "Content-Type: application/json" \
   -d '{
     "model": "llama3.2",
-    "messages": [{"role": "user", "content": "Summarize the uploaded document"}],
-    "use_rag": true
+    "messages": [{"role": "user", "content": "What is the topic of my uploaded file?"}],
+    "conversation_id": null
   }'
 ```
+
+Response is a stream of Server-Sent Events: `status` (tool running), `media` (a generated file is ready), `memory_proposal` (awaiting your approval), `token` (answer text), `done`.
 
 ---
 
@@ -182,34 +221,60 @@ curl -X POST http://localhost:3001/api/chat \
 ```
 privateai/
 ├── backend/
-│   ├── main.py            # FastAPI application — all API routes
-│   ├── requirements.txt   # Python dependencies
-│   └── Dockerfile          # Backend container build
+│   ├── main.py              # FastAPI app — agent loop, tools, all API routes
+│   ├── requirements.txt
+│   └── Dockerfile
+├── frontend-react/          # Current frontend — React + Vite + Tailwind dashboard
+│   ├── src/app/
+│   │   ├── routes.tsx       # React Router config
+│   │   ├── pages/           # ChatPage, DocumentsPage (wired) + 9 others (mock data)
+│   │   └── components/      # DashboardLayout (sidebar/nav), shadcn/ui components
+│   └── Dockerfile           # Multi-stage: npm build → nginx:alpine
+├── frontend/                # Previous frontend (vanilla JS) — no longer used by
+│                             # docker-compose.yml, kept on disk for reference
 ├── docker/
-│   └── nginx.conf          # Reverse proxy + static file serving config
-├── frontend/
-│   └── index.html          # Single-page Vanilla JS frontend
-├── docker-compose.yml      # Full stack orchestration
-├── .env.example             # Environment variable template
+│   └── nginx.conf           # Reverse proxy + SPA fallback config
+├── docker-compose.yml
+├── .env.example
 └── README.md
 ```
+
+> **Note:** `frontend/` (vanilla JS) was the original implementation and has been superseded by `frontend-react/`. It's no longer referenced by `docker-compose.yml` and can be deleted once you're confident the migration covers everything you need.
+
+---
+
+## 🧭 Dashboard Pages — What's Real vs. Mock
+
+The React dashboard ports an 11-page enterprise UI design. Two pages are fully wired to the live backend; the rest currently show the design's original placeholder data, since there's no backend equivalent yet for things like user management or deployment pipelines.
+
+| Page | Status |
+|---|---|
+| Chat | ✅ Fully wired — real models, real streaming, real tool activity, real memory proposals |
+| Documents | ✅ Fully wired — real upload, real document table, real delete (cascades to vector store) |
+| Dashboard (overview) | ⚪ Mock data |
+| Models | ⚪ Mock data |
+| Agents | ⚪ Mock data |
+| Knowledge Bases | ⚪ Mock data |
+| Analytics | ⚪ Mock data |
+| Users | ⚪ Mock data (no auth/user system exists) |
+| Security | ⚪ Mock data |
+| Deployment | ⚪ Mock data |
 
 ---
 
 ## 🐛 Known Issues & Fixes Applied
 
-This copy includes the following fixes over the original repository:
-
-1. **Upload crash on near-empty documents** — uploading a blank or whitespace-only `.txt`/`.md` file (or a scanned PDF with no extractable text) previously caused ChromaDB to throw `ValueError: Expected IDs to be a non-empty list, got 0 IDs`, surfacing as an HTTP 500 to the user. Fixed by checking the chunk count before calling `collection.add(...)`.
-
-2. **`langchain-ollama` / `langchain` version conflict** — the original `requirements.txt` pinned `langchain==0.2.5` alongside `langchain-ollama==0.1.1`, an old version of `langchain-ollama` whose `OllamaEmbeddings` class doesn't accept a `base_url` argument at all. This caused an import-time crash (`pydantic.v1.error_wrappers.ValidationError: extra fields not permitted`) that killed the backend container before it ever started serving requests. Fixed by moving `langchain`, `langchain-community`, and `langchain-ollama` to compatible version ranges (`0.3.x` / `0.2.x` respectively) so pip can resolve a consistent set.
+1. **Upload crash on near-empty documents** — a blank or whitespace-only file used to crash ChromaDB's `add()` call with an unhandled 500. Fixed by checking the chunk count before writing.
+2. **`langchain-ollama` / `langchain` version conflict** — the original pinned versions were mutually incompatible (`OllamaEmbeddings` didn't accept `base_url` in the pinned `langchain-ollama` version), crashing the backend at import time. Fixed by moving to compatible version ranges.
+3. **Ollama healthcheck always failing** — the original healthcheck used `curl`, which isn't installed in the `ollama/ollama` image, so it reported "unhealthy" even when working correctly. Fixed by using `ollama list` instead.
+4. **Model not searching uploaded documents** — smaller models (e.g. `llama3.2`) would sometimes answer questions about uploaded files by guessing from the filename instead of calling `search_documents`. Fixed with an explicit system prompt instructing the agent to always search before answering document-related questions.
 
 ### Troubleshooting
 
-- **Backend container keeps restarting / `Connection refused` from Nginx**: check `docker compose logs backend` for a Python traceback. An import-time crash means the FastAPI app never actually starts listening, which is why Nginx gets connection-refused errors on every `/api/...` call.
-- **`docker compose build` fails with `ResolutionImpossible`**: this means two pinned package versions in `requirements.txt` are mutually incompatible. Loosen the pin to a version range (as done in the fix above) and rebuild with `docker compose build --no-cache backend`.
-- **Stale image after fixing `requirements.txt`**: a plain `docker compose restart` or `up -d` will **not** pick up dependency changes — you must rebuild the image with `docker compose build backend` (or `--no-cache` if you've changed pins) before bringing it back up.
-- **Model not appearing in the dropdown after pulling it**: refresh the page — the model list is fetched fresh from `/api/models` on load.
+- **Backend container keeps restarting**: check `docker compose logs backend` for a Python traceback — an import-time crash means the app never starts listening, so Nginx will show connection-refused errors on every `/api/...` call.
+- **`docker compose build` fails with `ResolutionImpossible`**: two pinned package versions are mutually incompatible — loosen the pin to a version range and rebuild with `--no-cache`.
+- **Frontend changes not appearing**: a plain `docker compose up -d` does **not** rebuild the React app — you must `docker compose build --no-cache nginx` first, since the build happens inside the image, not via a bind mount.
+- **GPU not detected**: see [GPU Setup](#-gpu-setup-nvidia) above — Docker Desktop on Linux is a common, non-obvious blocker.
 
 ---
 
