@@ -1,4 +1,3 @@
-version: "3.9"
 
 services:
   ollama:
@@ -11,8 +10,28 @@ services:
       - ollama_data:/root/.ollama
     environment:
       - OLLAMA_HOST=0.0.0.0
+      # Reserve ~1GB of VRAM that Ollama won't touch, leaving it for the
+      # OS/display and reducing peak GPU memory pressure. This is a
+      # reservation, not a hard cap — Ollama has no reliable hard VRAM
+      # ceiling as of this writing (see ollama/ollama#16561, #5754) — so
+      # this is a mitigation, not a guarantee, on a 4GB card.
+      - OLLAMA_GPU_OVERHEAD=1073741824
+      # Cuts KV cache VRAM usage by roughly half with no quality loss;
+      # required for KV cache quantization below.
+      - OLLAMA_FLASH_ATTENTION=1
+      # Quantizes the attention cache, further reducing VRAM at a small
+      # quality cost. q8_0 is the conservative option (q4_0 is more
+      # aggressive but degrades quality more).
+      - OLLAMA_KV_CACHE_TYPE=q8_0
+      # Smaller context window means less VRAM per request. 2048 is
+      # enough for normal chat; raise if you need longer conversations
+      # and your hardware proves stable.
+      - OLLAMA_CONTEXT_LENGTH=2048
     deploy:
       resources:
+        limits:
+          memory: 16g
+          cpus: "6"
         reservations:
           devices:
             - driver: nvidia
