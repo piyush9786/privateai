@@ -404,12 +404,34 @@ AGENT_SYSTEM_PROMPT = (
 )
 
 
+def build_system_prompt(custom_preset: dict | None) -> str:
+    """Combine the base tool-use rules with an optional custom agent preset.
+
+    The preset's instructions are layered on top of (not instead of) the
+    base prompt, so switching to a custom persona doesn't silently disable
+    reliable tool-calling behavior (e.g. always searching documents before
+    answering about them).
+    """
+    if not custom_preset:
+        return AGENT_SYSTEM_PROMPT
+    return (
+        f"{AGENT_SYSTEM_PROMPT}\n\n"
+        f"In addition, follow this persona/instructions for how you respond:\n"
+        f"{custom_preset['system_prompt']}"
+    )
+
+
 # ── AGENT CHAT (STREAMING, TOOL-CALLING) ──────────────────────────────────────
 @router.post("/chat/stream")
 async def chat_stream(request: dict):
+    from db import db_get_agent_preset
+
     messages = list(request.get("messages", []))
+    agent_id = request.get("agent_id")
+    custom_preset = db_get_agent_preset(agent_id) if agent_id else None
+
     if not messages or messages[0].get("role") != "system":
-        messages = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}] + messages
+        messages = [{"role": "system", "content": build_system_prompt(custom_preset)}] + messages
     model = request.get("model", DEFAULT_MODEL)
     conversation_id = request.get("conversation_id")
 

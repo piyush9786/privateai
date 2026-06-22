@@ -53,6 +53,8 @@ export default function ChatPage() {
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [models, setModels] = useState<string[]>(["llama3.2"]);
   const [selectedModel, setSelectedModel] = useState("llama3.2");
+  const [agentPresets, setAgentPresets] = useState<{ id: string; name: string }[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState<string>("default");
   const [isStreaming, setIsStreaming] = useState(false);
   const [statusTrail, setStatusTrail] = useState<StatusEvent[]>([]);
   const [memoryProposal, setMemoryProposal] = useState<MemoryProposal | null>(null);
@@ -67,6 +69,7 @@ export default function ChatPage() {
   useEffect(() => {
     loadModels();
     loadConversations();
+    loadAgentPresets();
   }, []);
 
   useEffect(() => {
@@ -84,6 +87,16 @@ export default function ChatPage() {
       }
     } catch {
       // keep default model list on failure
+    }
+  }
+
+  async function loadAgentPresets() {
+    try {
+      const r = await fetch("/api/agents");
+      const d = await r.json();
+      setAgentPresets((d.agents || []).map((a: any) => ({ id: a.id, name: a.name })));
+    } catch {
+      // dropdown just shows "Default" on failure
     }
   }
 
@@ -176,6 +189,7 @@ export default function ChatPage() {
           messages: nextMessages,
           model: selectedModel,
           conversation_id: conversationId,
+          agent_id: selectedAgentId !== "default" ? selectedAgentId : undefined,
         }),
       });
 
@@ -383,18 +397,33 @@ export default function ChatPage() {
                   </span>
                 </div>
               </div>
-              <Select value={selectedModel} onValueChange={setSelectedModel}>
-                <SelectTrigger className="w-48 bg-white/5 border-white/10 text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {models.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-2">
+                <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
+                  <SelectTrigger className="w-44 bg-white/5 border-white/10 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Default assistant</SelectItem>
+                    {agentPresets.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={selectedModel} onValueChange={setSelectedModel}>
+                  <SelectTrigger className="w-48 bg-white/5 border-white/10 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {models.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {m}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
 
