@@ -49,6 +49,16 @@ def init_db():
             uploaded_at TEXT NOT NULL
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS agent_presets (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            system_prompt TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -159,3 +169,51 @@ def db_delete_document_row(document_id: str):
     conn.execute("DELETE FROM documents WHERE id = ?", (document_id,))
     conn.commit()
     conn.close()
+
+
+# ── Agent presets ────────────────────────────────────────────────────────────
+def db_create_agent_preset(name: str, description: str, system_prompt: str) -> str:
+    preset_id = str(uuid.uuid4())
+    conn = get_db()
+    ts = now_iso()
+    conn.execute(
+        "INSERT INTO agent_presets (id, name, description, system_prompt, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (preset_id, name, description, system_prompt, ts, ts),
+    )
+    conn.commit()
+    conn.close()
+    return preset_id
+
+
+def db_list_agent_presets():
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM agent_presets ORDER BY created_at ASC").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def db_get_agent_preset(preset_id: str):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM agent_presets WHERE id = ?", (preset_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def db_update_agent_preset(preset_id: str, name: str, description: str, system_prompt: str) -> bool:
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE agent_presets SET name = ?, description = ?, system_prompt = ?, updated_at = ? WHERE id = ?",
+        (name, description, system_prompt, now_iso(), preset_id),
+    )
+    conn.commit()
+    updated = cur.rowcount > 0
+    conn.close()
+    return updated
+
+
+def db_delete_agent_preset(preset_id: str):
+    conn = get_db()
+    conn.execute("DELETE FROM agent_presets WHERE id = ?", (preset_id,))
+    conn.commit()
+    conn.close()
+
