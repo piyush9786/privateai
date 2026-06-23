@@ -52,3 +52,33 @@ async def system_status():
         pass
 
     return result
+
+
+@router.get("/chromadb")
+async def chromadb_stats():
+    """Real ChromaDB internals — actual collection counts and a live-measured
+    query latency, not invented numbers. No per-department breakdown exists
+    since there's only one document vault and one memory store; this surfaces
+    what's genuinely there instead of pretending otherwise.
+    """
+    import time
+    from clients import get_collection, get_memory_collection, embed_text
+    from config import EMBED_MODEL
+
+    collections = []
+    for label, getter in [("Document vault", get_collection), ("Memory store", get_memory_collection)]:
+        entry = {"name": label, "count": 0, "query_ms": None, "reachable": False, "error": None}
+        try:
+            col = getter()
+            entry["count"] = col.count()
+            entry["reachable"] = True
+            if entry["count"] > 0:
+                probe_embedding = embed_text("status check")
+                start = time.perf_counter()
+                col.query(query_embeddings=[probe_embedding], n_results=min(4, entry["count"]))
+                entry["query_ms"] = round((time.perf_counter() - start) * 1000, 1)
+        except Exception as e:
+            entry["error"] = str(e)
+        collections.append(entry)
+
+    return {"embedding_model": EMBED_MODEL, "collections": collections}
