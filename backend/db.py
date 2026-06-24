@@ -7,6 +7,7 @@ data (who said what, when, which files were uploaded).
 import sqlite3
 import uuid
 import datetime
+import json
 
 from config import DB_PATH
 
@@ -57,6 +58,17 @@ def init_db():
             system_prompt TEXT NOT NULL,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS message_events (
+            id TEXT PRIMARY KEY,
+            conversation_id TEXT,
+            model TEXT NOT NULL,
+            latency_ms INTEGER NOT NULL,
+            tool_calls TEXT NOT NULL DEFAULT '[]',
+            agent_id TEXT,
+            created_at TEXT NOT NULL
         )
     """)
     conn.commit()
@@ -216,4 +228,34 @@ def db_delete_agent_preset(preset_id: str):
     conn.execute("DELETE FROM agent_presets WHERE id = ?", (preset_id,))
     conn.commit()
     conn.close()
+
+
+# ── Message events (analytics) ──────────────────────────────────────────────
+def db_record_message_event(conversation_id: str, model: str, latency_ms: int, tool_calls: list, agent_id: str = None):
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO message_events (id, conversation_id, model, latency_ms, tool_calls, agent_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (str(uuid.uuid4()), conversation_id, model, latency_ms, json.dumps(tool_calls), agent_id, now_iso()),
+    )
+    conn.commit()
+    conn.close()
+
+
+def db_get_analytics_summary(days: int = 7):
+    """Aggregate real message_events data for the Analytics page.
+
+    Everything here is computed from rows that were actually recorded —
+    no estimates, no filled-in placeholder numbers.
+    """
+    conn = get_db()
+    cutoff = (datetime.datetime.utcnow() - datetime.timedelta(days=days)).isoformat()
+
+    rows = conn.execute(
+        "SELECT model, latency_ms, tool_calls, created_at FROM message_events WHERE created_at >= ? ORDER BY created_at ASC",
+        (cutoff,),
+    ).fetchall()
+    conn.close()
+
+    return [dict(r) for r in rows]
+
 

@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from config import EXPORT_DIR
 from db import init_db
-from routers import health, models, system, chat, conversations, memory, documents, generative, agents
+from routers import health, models, system, chat, conversations, memory, documents, generative, agents, analytics
 
 app = FastAPI(title="PrivateAI Enhanced")
 
@@ -36,3 +36,4 @@ app.include_router(memory.router)
 app.include_router(documents.router)
 app.include_router(generative.router)
 app.include_router(agents.router)
+app.include_router(analytics.router)

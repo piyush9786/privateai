@@ -424,7 +424,8 @@ def build_system_prompt(custom_preset: dict | None) -> str:
 # ── AGENT CHAT (STREAMING, TOOL-CALLING) ──────────────────────────────────────
 @router.post("/chat/stream")
 async def chat_stream(request: dict):
-    from db import db_get_agent_preset
+    import time
+    from db import db_get_agent_preset, db_record_message_event
 
     messages = list(request.get("messages", []))
     agent_id = request.get("agent_id")
@@ -442,6 +443,9 @@ async def chat_stream(request: dict):
     async def event_gen():
         def sse(event: str, data: dict):
             return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+        turn_start = time.perf_counter()
+        tools_used_this_turn = []
 
         max_rounds = 6
         for _ in range(max_rounds):
@@ -462,6 +466,8 @@ async def chat_stream(request: dict):
                 yield sse("token", {"text": content})
                 if conversation_id and content.strip():
                     db_save_message(conversation_id, "assistant", content)
+                latency_ms = int((time.perf_counter() - turn_start) * 1000)
+                db_record_message_event(conversation_id, model, latency_ms, tools_used_this_turn, agent_id)
                 yield sse("done", {})
                 return
 
@@ -470,6 +476,7 @@ async def chat_stream(request: dict):
                 fn = call.get("function", {})
                 name = fn.get("name", "")
                 args = fn.get("arguments", {}) or {}
+                tools_used_this_turn.append(name)
 
                 if name == "propose_memory":
                     memory_text = args.get("memory_text", "").strip()
@@ -497,6 +504,8 @@ async def chat_stream(request: dict):
 
                 messages.append({"role": "tool", "tool_name": name, "content": str(text_result)})
 
+        latency_ms = int((time.perf_counter() - turn_start) * 1000)
+        db_record_message_event(conversation_id, model, latency_ms, tools_used_this_turn, agent_id)
         yield sse("token", {"text": "Reached the maximum number of tool calls for this turn."})
         yield sse("done", {})
 
