@@ -1,22 +1,21 @@
 import json
 from collections import defaultdict
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from auth import get_current_user
 from db import db_get_analytics_summary
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
 
 @router.get("/summary")
-async def analytics_summary(days: int = 7):
-    """Real, aggregated analytics from actual recorded chat turns.
-
-    Every number here comes from message_events rows written at the moment
-    a real chat turn completed — no synthetic data, no filled-in averages
-    for days with zero traffic (those days just don't appear).
+async def analytics_summary(days: int = 7, user: dict = Depends(get_current_user)):
+    """Real, aggregated analytics from actual recorded chat turns belonging
+    to the authenticated user. Every number here comes from message_events
+    rows written at the moment a real chat turn completed.
     """
-    events = db_get_analytics_summary(days=days)
+    events = db_get_analytics_summary(user["id"], days=days)
 
     total_turns = len(events)
     avg_latency_ms = round(sum(e["latency_ms"] for e in events) / total_turns) if total_turns else 0

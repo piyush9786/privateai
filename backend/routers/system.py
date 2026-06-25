@@ -1,7 +1,8 @@
 import httpx
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from config import OLLAMA_URL, CHROMA_HOST, CHROMA_PORT
+from auth import get_current_user
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -55,11 +56,11 @@ async def system_status():
 
 
 @router.get("/chromadb")
-async def chromadb_stats():
+async def chromadb_stats(user: dict = Depends(get_current_user)):
     """Real ChromaDB internals — actual collection counts and a live-measured
     query latency, not invented numbers. No per-department breakdown exists
-    since there's only one document vault and one memory store; this surfaces
-    what's genuinely there instead of pretending otherwise.
+    since there's only one document vault and one memory store per user;
+    this surfaces what's genuinely there instead of pretending otherwise.
     """
     import time
     from clients import get_collection, get_memory_collection, embed_text
@@ -69,7 +70,7 @@ async def chromadb_stats():
     for label, getter in [("Document vault", get_collection), ("Memory store", get_memory_collection)]:
         entry = {"name": label, "count": 0, "query_ms": None, "reachable": False, "error": None}
         try:
-            col = getter()
+            col = getter(user["id"])
             entry["count"] = col.count()
             entry["reachable"] = True
             if entry["count"] > 0:

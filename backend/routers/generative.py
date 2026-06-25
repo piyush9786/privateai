@@ -6,10 +6,11 @@ from pathlib import Path
 import httpx
 import pandas as pd
 import matplotlib.pyplot as plt
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter, Depends, UploadFile, File
 
 from config import OLLAMA_URL, DEFAULT_MODEL, UPLOAD_DIR, EXPORT_DIR
 from clients import chroma_client, get_collection
+from auth import get_current_user
 from langchain_community.document_loaders import PyPDFLoader
 
 router = APIRouter(tags=["generative"])
@@ -276,9 +277,9 @@ async def voice_transcribe(file: UploadFile = File(...)):
 
 # ── RAG COLLECTION INFO ───────────────────────────────────────────────────────
 @router.get("/api/rag/info")
-async def rag_info():
+async def rag_info(user: dict = Depends(get_current_user)):
     try:
-        col = get_collection()
+        col = get_collection(user["id"])
         count = col.count()
         return {"status": "ok", "documents": count}
     except Exception as e:
@@ -286,10 +287,10 @@ async def rag_info():
 
 
 @router.delete("/api/rag/clear")
-async def rag_clear():
+async def rag_clear(user: dict = Depends(get_current_user)):
     try:
-        chroma_client.delete_collection("privateai_docs")
-        get_collection()
+        chroma_client.delete_collection(f"privateai_docs_{user['id']}")
+        get_collection(user["id"])
         return {"status": "ok", "message": "RAG cleared"}
     except Exception as e:
         return {"status": "error", "error": str(e)}
