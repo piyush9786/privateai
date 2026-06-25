@@ -12,12 +12,12 @@ chroma_client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
 embeddings = OllamaEmbeddings(model=EMBED_MODEL, base_url=OLLAMA_URL)
 
 
-def get_collection():
-    return chroma_client.get_or_create_collection("privateai_docs")
+def get_collection(user_id: str):
+    return chroma_client.get_or_create_collection(f"privateai_docs_{user_id}")
 
 
-def get_memory_collection():
-    return chroma_client.get_or_create_collection("privateai_memories")
+def get_memory_collection(user_id: str):
+    return chroma_client.get_or_create_collection(f"privateai_memories_{user_id}")
 
 
 def embed_text(text: str):

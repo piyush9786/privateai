@@ -1,21 +1,23 @@
 import json
 import uuid
+import time
 
 import httpx
 import pandas as pd
 import matplotlib.pyplot as plt
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 from config import OLLAMA_URL, DEFAULT_MODEL, UPLOAD_DIR, EXPORT_DIR
 from clients import get_collection, get_memory_collection, embed_text
-from db import db_save_message, db_maybe_set_title
+from auth import get_current_user
+from db import db_save_message, db_maybe_set_title, db_get_agent_preset, db_record_message_event
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
 # ── SIMPLE (NON-AGENTIC) CHAT ────────────────────────────────────────────────
 @router.post("/chat")
-async def chat(request: dict):
+async def chat(request: dict, user: dict = Depends(get_current_user)):
     messages = request.get("messages", [])
     model = request.get("model", DEFAULT_MODEL)
     use_rag = request.get("use_rag", False)
@@ -24,7 +26,7 @@ async def chat(request: dict):
 
     if use_rag and user_msg:
         try:
-            col = get_collection()
+            col = get_collection(user["id"])
             qe = embed_text(user_msg)
             results = col.query(query_embeddings=[qe], n_results=4)
             docs = results.get("documents", [[]])[0]
@@ -44,7 +46,8 @@ async def chat(request: dict):
 # ── AGENT TOOLS ───────────────────────────────────────────────────────────────
 # JSON-schema tool definitions handed to Ollama's `tools` parameter, plus the
 # Python implementations the agent loop dispatches to when the model requests
-# one of them.
+# one of them. Tools that touch the document vault or memory store take a
+# user_id so they only ever see that user's own data.
 
 AGENT_TOOLS = [
     {
@@ -198,9 +201,9 @@ TOOL_STATUS_LABELS = {
 }
 
 
-async def tool_search_documents(query: str):
+async def tool_search_documents(user_id: str, query: str):
     try:
-        col = get_collection()
+        col = get_collection(user_id)
         qe = embed_text(query)
         results = col.query(query_embeddings=[qe], n_results=4)
         docs = results.get("documents", [[]])[0]
@@ -339,9 +342,9 @@ async def tool_transcribe_voice_note(filename: str):
         return f"Transcription failed: {e}"
 
 
-async def tool_recall_memories(query: str):
+async def tool_recall_memories(user_id: str, query: str):
     try:
-        mem_col = get_memory_collection()
+        mem_col = get_memory_collection(user_id)
         if mem_col.count() == 0:
             return "No memories stored yet."
         qe = embed_text(query)
@@ -354,19 +357,20 @@ async def tool_recall_memories(query: str):
         return f"Memory recall failed: {e}"
 
 
-def save_confirmed_memory(memory_text: str):
+def save_confirmed_memory(user_id: str, memory_text: str):
     """Actually writes a memory to the vector store. Only called after user confirmation."""
-    mem_col = get_memory_collection()
+    mem_col = get_memory_collection(user_id)
     emb = embed_text(memory_text)
     mem_id = str(uuid.uuid4())
     mem_col.add(documents=[memory_text], embeddings=[emb], ids=[mem_id], metadatas=[{"created": str(uuid.uuid1().time)}])
     return mem_id
 
 
-async def execute_tool(name: str, args: dict):
-    """Dispatch a tool call by name. Returns (text_result, optional_media_url)."""
+async def execute_tool(user_id: str, name: str, args: dict):
+    """Dispatch a tool call by name. Returns (text_result, optional_media_url).
+    user_id is threaded through to any tool that touches per-user storage."""
     if name == "search_documents":
-        return await tool_search_documents(args.get("query", "")), None
+        return await tool_search_documents(user_id, args.get("query", "")), None
     if name == "create_chart":
         return await tool_create_chart(args.get("chart_type", "bar"), args.get("labels", []), args.get("values", []), args.get("title", "Chart"))
     if name == "read_spreadsheet":
@@ -380,14 +384,15 @@ async def execute_tool(name: str, args: dict):
     if name == "transcribe_voice_note":
         return await tool_transcribe_voice_note(args.get("filename", "")), None
     if name == "recall_memories":
-        return await tool_recall_memories(args.get("query", "")), None
+        return await tool_recall_memories(user_id, args.get("query", "")), None
     return f"Unknown tool: {name}", None
 
 
 # In-memory store for pending (unconfirmed) memory proposals. Keyed by a
 # short-lived proposal id; cleared on confirm/reject or app restart. This is
 # intentionally not persisted — an unconfirmed proposal isn't a memory yet.
-# Shared with routers/memory.py, which resolves proposals from this same dict.
+# Each entry records which user created it, so routers/memory.py can refuse
+# to let a different user confirm someone else's pending proposal.
 PENDING_MEMORY_PROPOSALS = {}
 
 AGENT_SYSTEM_PROMPT = (
@@ -423,13 +428,11 @@ def build_system_prompt(custom_preset: dict | None) -> str:
 
 # ── AGENT CHAT (STREAMING, TOOL-CALLING) ──────────────────────────────────────
 @router.post("/chat/stream")
-async def chat_stream(request: dict):
-    import time
-    from db import db_get_agent_preset, db_record_message_event
-
+async def chat_stream(request: dict, user: dict = Depends(get_current_user)):
+    user_id = user["id"]
     messages = list(request.get("messages", []))
     agent_id = request.get("agent_id")
-    custom_preset = db_get_agent_preset(agent_id) if agent_id else None
+    custom_preset = db_get_agent_preset(user_id, agent_id) if agent_id else None
 
     if not messages or messages[0].get("role") != "system":
         messages = [{"role": "system", "content": build_system_prompt(custom_preset)}] + messages
@@ -467,7 +470,7 @@ async def chat_stream(request: dict):
                 if conversation_id and content.strip():
                     db_save_message(conversation_id, "assistant", content)
                 latency_ms = int((time.perf_counter() - turn_start) * 1000)
-                db_record_message_event(conversation_id, model, latency_ms, tools_used_this_turn, agent_id)
+                db_record_message_event(user_id, conversation_id, model, latency_ms, tools_used_this_turn, agent_id)
                 yield sse("done", {})
                 return
 
@@ -484,7 +487,11 @@ async def chat_stream(request: dict):
                         messages.append({"role": "tool", "tool_name": name, "content": "No memory text provided."})
                         continue
                     proposal_id = str(uuid.uuid4())
-                    PENDING_MEMORY_PROPOSALS[proposal_id] = {"memory_text": memory_text, "messages": messages}
+                    PENDING_MEMORY_PROPOSALS[proposal_id] = {
+                        "user_id": user_id,
+                        "memory_text": memory_text,
+                        "messages": messages,
+                    }
                     yield sse("memory_proposal", {"proposal_id": proposal_id, "memory_text": memory_text})
                     messages.append({"role": "tool", "tool_name": name, "content": "Proposal sent to the user for confirmation. Do not propose this again in this turn."})
                     yield sse("done", {})
@@ -493,7 +500,7 @@ async def chat_stream(request: dict):
                 label = TOOL_STATUS_LABELS.get(name, f"Running {name}…")
                 yield sse("status", {"label": label, "tool": name})
 
-                tool_result = await execute_tool(name, args)
+                tool_result = await execute_tool(user_id, name, args)
                 if isinstance(tool_result, tuple):
                     text_result, media_url = tool_result
                 else:
@@ -505,7 +512,7 @@ async def chat_stream(request: dict):
                 messages.append({"role": "tool", "tool_name": name, "content": str(text_result)})
 
         latency_ms = int((time.perf_counter() - turn_start) * 1000)
-        db_record_message_event(conversation_id, model, latency_ms, tools_used_this_turn, agent_id)
+        db_record_message_event(user_id, conversation_id, model, latency_ms, tools_used_this_turn, agent_id)
         yield sse("token", {"text": "Reached the maximum number of tool calls for this turn."})
         yield sse("done", {})
 

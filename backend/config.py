@@ -12,6 +12,10 @@ CHROMA_PORT = int(os.getenv("CHROMADB_PORT", "8000"))
 DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "llama3.2")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
 
+JWT_SECRET = os.getenv("APP_SECRET", "changeme-in-production-please")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_HOURS = 24 * 7  # one week
+
 UPLOAD_DIR = Path("/app/uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
