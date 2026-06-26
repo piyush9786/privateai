@@ -1,4 +1,4 @@
-import { Outlet, Link, useLocation } from "react-router";
+import { Outlet, Link, useLocation, useNavigate } from "react-router";
 import { 
   LayoutDashboard, 
   MessageSquare, 
@@ -11,16 +11,19 @@ import {
   Shield, 
   Search,
   Bell,
-  ChevronDown,
-  Rocket
+  Rocket,
+  LogOut
 } from "lucide-react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback } from "./ui/avatar";
+import { useAuth } from "../context/AuthContext";
 
 export default function DashboardLayout() {
   const location = useLocation();
-  
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
   const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { name: "AI Chat", href: "/dashboard/chat", icon: MessageSquare },
@@ -29,10 +32,27 @@ export default function DashboardLayout() {
     { name: "Knowledge Bases", href: "/dashboard/knowledge", icon: Database },
     { name: "Agents", href: "/dashboard/agents", icon: Bot },
     { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
-    { name: "Users", href: "/dashboard/users", icon: Users },
+    // "Users" only makes sense — and is only reachable — for admins.
+    ...(user?.role === "admin"
+      ? [{ name: "Users", href: "/dashboard/users", icon: Users }]
+      : []),
     { name: "Security", href: "/dashboard/security", icon: Shield },
     { name: "Deployment", href: "/dashboard/deployment", icon: Rocket },
   ];
+
+  async function handleLogout() {
+    await logout();
+    navigate("/login");
+  }
+
+  const initials = user?.display_name
+    ? user.display_name
+        .split(" ")
+        .map((p) => p[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase()
+    : "?";
 
   const isActive = (href: string) => {
     if (href === "/dashboard") {
@@ -109,14 +129,24 @@ export default function DashboardLayout() {
                 <div className="flex items-center gap-3 pl-4 border-l border-white/10">
                   <Avatar className="w-9 h-9">
                     <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-sm">
-                      AD
+                      {initials}
                     </AvatarFallback>
                   </Avatar>
                   <div className="text-sm">
-                    <div className="font-medium text-white">Admin User</div>
-                    <div className="text-gray-400 text-xs">Super Admin</div>
+                    <div className="font-medium text-white">{user?.display_name ?? "…"}</div>
+                    <div className="text-gray-400 text-xs">
+                      {user?.role === "admin" ? "Admin" : "User"}
+                    </div>
                   </div>
-                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-gray-400 hover:text-white"
+                    onClick={handleLogout}
+                    title="Log out"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </Button>
                 </div>
               </div>
             </div>

@@ -91,6 +91,16 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id TEXT PRIMARY KEY,
+            user_id TEXT,
+            email TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            ip_address TEXT,
+            created_at TEXT NOT NULL
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -356,3 +366,47 @@ def db_get_analytics_summary(user_id: str, days: int = 7):
     conn.close()
 
     return [dict(r) for r in rows]
+
+
+# ── Audit log ────────────────────────────────────────────────────────────────
+def db_record_audit_event(email: str, event_type: str, ip_address: str = None, user_id: str = None):
+    """event_type is one of: login_success, login_failed, register, logout.
+    user_id is None for login_failed against an email with no matching
+    account — we still want the attempted email for monitoring, without
+    pretending it maps to a real user.
+    """
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO audit_log (id, user_id, email, event_type, ip_address, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (str(uuid.uuid4()), user_id, email, event_type, ip_address, now_iso()),
+    )
+    conn.commit()
+    conn.close()
+
+
+def db_list_audit_log(user_id: str = None, limit: int = 100):
+    """If user_id is given, only that user's own events (for their personal
+    view). If None, every event (admin-only view)."""
+    conn = get_db()
+    if user_id:
+        rows = conn.execute(
+            "SELECT * FROM audit_log WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM audit_log ORDER BY created_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def db_count_failed_logins_since(hours: int = 24) -> int:
+    conn = get_db()
+    cutoff = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=hours)).isoformat()
+    count = conn.execute(
+        "SELECT COUNT(*) as c FROM audit_log WHERE event_type = 'login_failed' AND created_at >= ?",
+        (cutoff,),
+    ).fetchone()["c"]
+    conn.close()
+    return count
