@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PrivateAI — Self-Hosted Agentic AI Platform</title>
+<meta name="description" content="An agentic AI platform that runs entirely on your own hardware. Local models via Ollama, local vector search, real multi-user accounts — open source.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F7F4EE;
+  --paper-raised:#FFFDF9;
+  --ink:#15140F;
+  --ink-dim:#5C5848;
+  --ink-faint:#928C77;
+  --line:#DDD7C8;
+  --line-strong:#C7C0AC;
+  --copper:#C2622A;
+  --copper-dim:#A2531F;
+  --copper-wash:#F1E0D2;
+  --green:#3F5C44;
+  --green-wash:#E3E9DF;
+  --font-display:'JetBrains Mono', 'Consolas', monospace;
+  --font-body:'Inter', -apple-system, sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:var(--font-body);
+  background:var(--paper);
+  color:var(--ink);
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:inherit}
+.wrap{max-width:1080px;margin:0 auto;padding:0 28px}
+@media (prefers-reduced-motion: reduce){ *{animation:none !important; transition:none !important} }
+
+nav{
+  border-bottom:1px solid var(--line);
+  background:var(--paper-raised);
+  position:sticky;top:0;z-index:50;
+}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;padding:18px 28px}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-weight:700;font-size:16px;letter-spacing:-.2px}
+.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--copper);flex-shrink:0;animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+.nav-links{display:flex;align-items:center;gap:28px;font-size:14px}
+.nav-links a{text-decoration:none;color:var(--ink-dim)}
+.nav-links a:hover{color:var(--ink)}
+.btn{
+  display:inline-flex;align-items:center;gap:8px;
+  font-family:var(--font-body);font-weight:600;font-size:14px;
+  padding:10px 18px;border-radius:7px;text-decoration:none;
+  border:1px solid transparent;cursor:pointer;
+}
+.btn-primary{background:var(--ink);color:var(--paper)}
+.btn-primary:hover{background:var(--copper-dim)}
+.btn-outline{border-color:var(--line-strong);color:var(--ink)}
+.btn-outline:hover{border-color:var(--ink)}
+
+.hero{padding:88px 0 64px;border-bottom:1px solid var(--line)}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:8px;
+  font-family:var(--font-display);font-size:12.5px;letter-spacing:.4px;
+  color:var(--green);background:var(--green-wash);
+  border:1px solid #cdd9c7;border-radius:5px;padding:6px 11px;margin-bottom:26px;
+}
+.eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--green)}
+h1{
+  font-family:var(--font-display);font-weight:700;
+  font-size:clamp(34px,5.4vw,58px);line-height:1.08;letter-spacing:-.5px;
+  max-width:780px;margin-bottom:24px;
+}
+h1 .accent{color:var(--copper)}
+.hero-sub{font-size:18px;color:var(--ink-dim);max-width:600px;margin-bottom:38px}
+.hero-actions{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:54px}
+.hero-actions .btn{padding:13px 24px;font-size:15px}
+
+.readout{
+  border:1px solid var(--line);border-radius:10px;background:var(--paper-raised);
+  overflow:hidden;
+}
+.readout-head{
+  display:flex;align-items:center;gap:10px;
+  padding:11px 18px;border-bottom:1px solid var(--line);
+  font-family:var(--font-display);font-size:12px;color:var(--ink-faint);letter-spacing:.3px;
+}
+.readout-head .lights{display:flex;gap:6px}
+.readout-head .lights span{width:8px;height:8px;border-radius:50%;background:var(--line-strong)}
+.readout-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.readout-item{
+  padding:18px 20px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);
+  font-family:var(--font-display);
+}
+.readout-item:last-child{border-right:none}
+.readout-item .val{font-size:26px;font-weight:700;color:var(--ink)}
+.readout-item .lbl{font-size:11.5px;color:var(--ink-faint);letter-spacing:.3px;margin-top:4px;text-transform:uppercase}
+
+section{padding:76px 0;border-bottom:1px solid var(--line)}
+.section-head{margin-bottom:44px;max-width:640px}
+.section-tag{
+  font-family:var(--font-display);font-size:12px;color:var(--copper);
+  letter-spacing:.5px;margin-bottom:12px;display:block;
+}
+.section-head h2{font-family:var(--font-display);font-size:clamp(24px,3vw,32px);font-weight:700;letter-spacing:-.3px;margin-bottom:12px}
+.section-head p{color:var(--ink-dim);font-size:16px}
+
+.spec-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.spec-item{background:var(--paper-raised);padding:26px}
+.spec-item .num{font-family:var(--font-display);font-size:12px;color:var(--copper-dim);margin-bottom:14px}
+.spec-item h3{font-size:17px;font-weight:600;margin-bottom:8px}
+.spec-item p{font-size:14px;color:var(--ink-dim)}
+
+.diagram{
+  border:1px solid var(--line);border-radius:10px;background:var(--paper-raised);
+  padding:36px;overflow-x:auto;
+}
+.diagram svg{display:block;margin:0 auto;min-width:640px;max-width:100%}
+.diagram-caption{font-size:13px;color:var(--ink-faint);text-align:center;margin-top:18px;font-family:var(--font-display)}
+
+.status-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.status-row{background:var(--paper-raised);padding:18px 20px;display:flex;align-items:flex-start;gap:12px}
+.status-row .indicator{width:9px;height:9px;border-radius:50%;margin-top:5px;flex-shrink:0}
+.status-row.on .indicator{background:var(--green)}
+.status-row.off .indicator{background:var(--ink-faint)}
+.status-row .name{font-weight:600;font-size:14.5px;margin-bottom:3px}
+.status-row .detail{font-size:13px;color:var(--ink-dim)}
+.status-row.off .name{color:var(--ink-dim)}
+.status-note{font-size:13px;color:var(--ink-faint);margin-top:18px;max-width:680px}
+
+.codeblock{
+  background:var(--ink);color:#E8E4D8;border-radius:10px;padding:22px 24px;
+  font-family:var(--font-display);font-size:13.5px;line-height:1.85;overflow-x:auto;
+}
+.codeblock .c{color:#7A8F7D}
+
+.cta{padding:80px 0;text-align:center}
+.cta h2{font-family:var(--font-display);font-size:clamp(26px,3.5vw,36px);font-weight:700;margin-bottom:14px}
+.cta p{color:var(--ink-dim);max-width:520px;margin:0 auto 32px}
+.cta-actions{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+
+footer{padding:32px 0}
+footer .wrap{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;font-size:13px;color:var(--ink-faint)}
+footer a{text-decoration:none}
+footer a:hover{color:var(--ink)}
+
+@media (max-width:640px){
+  .hero{padding:56px 0 40px}
+  section{padding:52px 0}
+  .readout-item{padding:16px}
+}
+:focus-visible{outline:2px solid var(--copper);outline-offset:2px}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <div class="brand"><span class="dot"></span>PRIVATEAI</div>
+    <div class="nav-links">
+      <a href="#architecture">Architecture</a>
+      <a href="#security">Security</a>
+      <a href="#quickstart">Quick Start</a>
+      <a class="btn btn-outline" href="https://github.com/piyush9786/privateai" target="_blank" rel="noreferrer">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow"><span class="dot"></span>SELF-HOSTED &middot; OPEN SOURCE &middot; RUNS ON YOUR HARDWARE</div>
+    <h1>An AI platform that lives<br>on <span class="accent">your machine,</span><br>not someone's cloud.</h1>
+    <p class="hero-sub">Agentic chat, document search, and memory — backed by local models via Ollama and a local vector store. The inference happens on hardware you own.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="https://github.com/piyush9786/privateai" target="_blank" rel="noreferrer">View source on GitHub →</a>
+      <a class="btn btn-outline" href="#quickstart">Read the quick start</a>
+    </div>
+
+    <div class="readout">
+      <div class="readout-head"><span class="lights"><span></span><span></span><span></span></span>SYSTEM READOUT — privateai_backend</div>
+      <div class="readout-grid">
+        <div class="readout-item"><div class="val">45</div><div class="lbl">API endpoints</div></div>
+        <div class="readout-item"><div class="val">7</div><div class="lbl">Agent tools</div></div>
+        <div class="readout-item"><div class="val">100%</div><div class="lbl">Local inference</div></div>
+        <div class="readout-item"><div class="val">0</div><div class="lbl">Third-party API calls</div></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section id="features">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-tag">// CAPABILITIES</span>
+      <h2>What's actually wired up</h2>
+      <p>Every item below calls a real backend endpoint — none of this is a mockup.</p>
+    </div>
+    <div class="spec-grid">
+      <div class="spec-item">
+        <div class="num">01 / TOOL-CALLING</div>
+        <h3>Agentic chat</h3>
+        <p>The model decides when to search documents, build a chart, or generate a file mid-conversation, with a live status trail showing each step.</p>
+      </div>
+      <div class="spec-item">
+        <div class="num">02 / RAG</div>
+        <h3>Private document search</h3>
+        <p>Upload PDFs, spreadsheets, or text. Chunked and embedded into your own ChromaDB instance — never sent anywhere external.</p>
+      </div>
+      <div class="spec-item">
+        <div class="num">03 / PERSONAS</div>
+        <h3>Custom agent presets</h3>
+        <p>Define named instruction sets and switch between them in chat. Same tools and vault every time, different focus.</p>
+      </div>
+      <div class="spec-item">
+        <div class="num">04 / ACCOUNTS</div>
+        <h3>Real multi-user isolation</h3>
+        <p>Each account has its own documents, conversations, and memories. Admin role for account management, scoped per user, not shared.</p>
+      </div>
+      <div class="spec-item">
+        <div class="num">05 / METRICS</div>
+        <h3>Honest analytics</h3>
+        <p>Chat-turn counts and latency recorded at the moment each conversation happens — not estimated, not a placeholder chart.</p>
+      </div>
+      <div class="spec-item">
+        <div class="num">06 / COMPUTE</div>
+        <h3>Your own GPU</h3>
+        <p>Runs on Ollama with NVIDIA acceleration when available. Llama 3.2, Qwen, and other open models — no API key, no per-token bill.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="architecture">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-tag">// TOPOLOGY</span>
+      <h2>How the pieces talk to each other</h2>
+      <p>Five containers on one Docker network. Nothing here calls out to a third party.</p>
+    </div>
+    <div class="diagram">
+      <svg viewBox="0 0 640 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Architecture diagram: Browser connects to Nginx, which proxies to the FastAPI backend, which connects to Ollama and ChromaDB.">
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+            <path d="M0,0 L8,4 L0,8 Z" fill="#5C5848"/>
+          </marker>
+        </defs>
+        <g font-family="JetBrains Mono, monospace" font-size="12.5" fill="#15140F">
+          <rect x="20" y="100" width="120" height="56" rx="6" fill="#FFFDF9" stroke="#DDD7C8"/>
+          <text x="80" y="124" text-anchor="middle" font-weight="600">Browser</text>
+          <text x="80" y="142" text-anchor="middle" fill="#928C77" font-size="11">:3001</text>
+
+          <rect x="190" y="100" width="120" height="56" rx="6" fill="#FFFDF9" stroke="#DDD7C8"/>
+          <text x="250" y="124" text-anchor="middle" font-weight="600">Nginx</text>
+          <text x="250" y="142" text-anchor="middle" fill="#928C77" font-size="11">React + proxy</text>
+
+          <rect x="360" y="100" width="120" height="56" rx="6" fill="#F1E0D2" stroke="#C2622A"/>
+          <text x="420" y="124" text-anchor="middle" font-weight="600">Backend</text>
+          <text x="420" y="142" text-anchor="middle" fill="#A2531F" font-size="11">FastAPI :8000</text>
+
+          <rect x="500" y="30" width="120" height="56" rx="6" fill="#FFFDF9" stroke="#DDD7C8"/>
+          <text x="560" y="54" text-anchor="middle" font-weight="600">Ollama</text>
+          <text x="560" y="72" text-anchor="middle" fill="#928C77" font-size="11">LLM + embed</text>
+
+          <rect x="500" y="170" width="120" height="56" rx="6" fill="#FFFDF9" stroke="#DDD7C8"/>
+          <text x="560" y="194" text-anchor="middle" font-weight="600">ChromaDB</text>
+          <text x="560" y="212" text-anchor="middle" fill="#928C77" font-size="11">vectors</text>
+
+          <line x1="140" y1="128" x2="188" y2="128" stroke="#5C5848" stroke-width="1.5" marker-end="url(#arrow)"/>
+          <line x1="310" y1="128" x2="358" y2="128" stroke="#5C5848" stroke-width="1.5" marker-end="url(#arrow)"/>
+          <line x1="480" y1="115" x2="498" y2="75" stroke="#5C5848" stroke-width="1.5" marker-end="url(#arrow)"/>
+          <line x1="480" y1="140" x2="498" y2="190" stroke="#5C5848" stroke-width="1.5" marker-end="url(#arrow)"/>
+        </g>
+      </svg>
+      <div class="diagram-caption">browser &rarr; nginx &rarr; fastapi &rarr; {ollama, chromadb}</div>
+    </div>
+  </div>
+</section>
+
+<section id="security">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-tag">// HONEST STATUS</span>
+      <h2>What's actually protecting your data</h2>
+      <p>No invented security score. This is genuinely true of the app today.</p>
+    </div>
+    <div class="status-list">
+      <div class="status-row on"><span class="indicator"></span><div><div class="name">Password authentication</div><div class="detail">bcrypt-hashed, never stored in plaintext</div></div></div>
+      <div class="status-row on"><span class="indicator"></span><div><div class="name">Per-user data isolation</div><div class="detail">Separate documents, chats, and memories per account</div></div></div>
+      <div class="status-row on"><span class="indicator"></span><div><div class="name">httpOnly session cookies</div><div class="detail">Not readable by page JavaScript</div></div></div>
+      <div class="status-row off"><span class="indicator"></span><div><div class="name">Multi-factor authentication</div><div class="detail">Not implemented</div></div></div>
+      <div class="status-row off"><span class="indicator"></span><div><div class="name">HTTPS by default</div><div class="detail">Plain HTTP unless you add a TLS proxy</div></div></div>
+      <div class="status-row off"><span class="indicator"></span><div><div class="name">Air-gapped / no internet</div><div class="detail">Local inference, but the host still has normal internet access</div></div></div>
+    </div>
+    <p class="status-note">This is a self-hosted, single-deployment app. If you expose it beyond localhost, add your own TLS termination and consider what additional hardening your threat model needs.</p>
+  </div>
+</section>
+
+<section id="quickstart">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-tag">// SETUP</span>
+      <h2>Running in under five minutes</h2>
+      <p>Docker Compose brings up all five services. The first account you create becomes the administrator.</p>
+    </div>
+    <div class="codeblock"><span class="c"># clone and configure</span>
+git clone https://github.com/piyush9786/privateai.git
+cd privateai
+cp .env.example .env
+
+<span class="c"># bring up the stack</span>
+docker compose up -d
+docker compose logs -f model-init
+
+<span class="c"># once models are ready</span>
+open http://localhost:3001</div>
+  </div>
+</section>
+
+<section class="cta" style="border-bottom:none">
+  <div class="wrap">
+    <h2>Run your own instance</h2>
+    <p>It's a Docker Compose file and an open repository — clone it, build it, point it at your own GPU.</p>
+    <div class="cta-actions">
+      <a class="btn btn-primary" href="https://github.com/piyush9786/privateai" target="_blank" rel="noreferrer">View on GitHub →</a>
+      <a class="btn btn-outline" href="https://github.com/piyush9786/privateai#readme" target="_blank" rel="noreferrer">Read the full docs</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>PrivateAI — self-hosted, open source</span>
+    <a href="https://github.com/piyush9786/privateai" target="_blank" rel="noreferrer">github.com/piyush9786/privateai</a>
+  </div>
+</footer>
+
+</body>
+</html>
