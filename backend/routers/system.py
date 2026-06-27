@@ -83,3 +83,52 @@ async def chromadb_stats(user: dict = Depends(get_current_user)):
         collections.append(entry)
 
     return {"embedding_model": EMBED_MODEL, "collections": collections}
+
+
+@router.get("/deployment")
+async def deployment_info(user: dict = Depends(get_current_user)):
+    """An honest deployment summary: real service reachability and real,
+    non-secret configuration — no fabricated uptime, restart counts, or
+    container CPU/memory, since getting those for real would require
+    mounting the Docker socket into the backend (a real privilege
+    escalation risk this deployment has deliberately chosen not to take).
+    """
+    from config import DEFAULT_MODEL, EMBED_MODEL
+
+    services = []
+
+    try:
+        async with httpx.AsyncClient(timeout=5) as c:
+            r = await c.get(f"{OLLAMA_URL}/api/tags")
+            services.append({"name": "Ollama", "reachable": r.status_code == 200, "detail": OLLAMA_URL})
+    except Exception:
+        services.append({"name": "Ollama", "reachable": False, "detail": OLLAMA_URL})
+
+    try:
+        async with httpx.AsyncClient(timeout=5) as c:
+            r = await c.get(f"http://{CHROMA_HOST}:{CHROMA_PORT}/api/v1/heartbeat")
+            services.append({
+                "name": "ChromaDB",
+                "reachable": r.status_code == 200,
+                "detail": f"{CHROMA_HOST}:{CHROMA_PORT}",
+            })
+    except Exception:
+        services.append({"name": "ChromaDB", "reachable": False, "detail": f"{CHROMA_HOST}:{CHROMA_PORT}"})
+
+    # The backend answering this request at all is itself the reachability
+    # proof — no network call needed to check on itself.
+    services.append({"name": "Backend (FastAPI)", "reachable": True, "detail": "this process"})
+
+    return {
+        "services": services,
+        "configuration": {
+            "default_chat_model": DEFAULT_MODEL,
+            "embedding_model": EMBED_MODEL,
+        },
+        "note": (
+            "Container uptime, restart counts, and per-container CPU/memory aren't "
+            "shown here — getting them for real requires mounting the Docker socket "
+            "into the backend, which grants broad control over the Docker host. This "
+            "deployment doesn't take that tradeoff for a status page."
+        ),
+    }
