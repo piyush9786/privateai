@@ -1,1 +1,5 @@
-Nothing needs to be added to the .gitignore file based on the provided file changes, as only source code files were modified without any build artifacts, dependencies, or temporary files.
+```
+# Logs and temp files
+*.log
+server.log
+```
