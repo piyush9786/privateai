@@ -4,7 +4,7 @@ from pathlib import Path
 import pandas as pd
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from config import UPLOAD_DIR
 from clients import get_collection, embed_text
