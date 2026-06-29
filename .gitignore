@@ -2,4 +2,6 @@
 # Logs and temp files
 *.log
 server.log
-```
+```__pycache__/
+*.pyc
+.env
